@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const dbMocks = vi.hoisted(() => ({
   createPvpMatch: vi.fn(),
+  deletePvpMatch: vi.fn(),
   getPvpMatch: vi.fn(),
   listPvpMatches: vi.fn(),
   recordPvpImport: vi.fn(),
@@ -113,8 +114,48 @@ describe("pvp.importJson", () => {
     });
   });
 
+  it("回傳同場結果回填統計，讓前端可辨識既有戰績已更新而非重複建立", async () => {
+    dbMocks.recordPvpImport.mockResolvedValue({
+      id: "batch-result-backfill",
+      createdCount: 0,
+      updatedCount: 1,
+    });
+    const caller = appRouter.createCaller(authenticatedContext(12));
+
+    await expect(caller.pvp.importJson({
+      label: "同場官方結果回填",
+      dataText: JSON.stringify({ records: [{
+        ...validRecord,
+        outcome: "win",
+        rankBefore: 904,
+        rankAfter: 878,
+        sourceBattleChannel: "pvp_battle:12345",
+      }], rawEvents: [] }),
+    })).resolves.toMatchObject({
+      batchId: "batch-result-backfill",
+      importedCount: 1,
+      createdCount: 0,
+      updatedCount: 1,
+    });
+    expect(dbMocks.recordPvpImport).toHaveBeenLastCalledWith(12, "同場官方結果回填", expect.objectContaining({
+      records: [expect.objectContaining({ sourceBattleChannel: "pvp_battle:12345", outcome: "win" })],
+    }));
+  });
+
   it("仍拒絕超過 25MB 匯入上限的字串", async () => {
     const caller = appRouter.createCaller(authenticatedContext(12));
     await expect(caller.pvp.importJson({ label: "過大匯出", dataText: " ".repeat(25_000_001) })).rejects.toThrow();
+  });
+});
+
+describe("pvp.delete", () => {
+  it("以登入使用者範圍刪除紀錄，並拒絕不屬於該使用者或不存在的 ID", async () => {
+    const caller = appRouter.createCaller(authenticatedContext(12));
+    dbMocks.deletePvpMatch.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+
+    await expect(caller.pvp.delete({ id: 91 })).resolves.toEqual({ success: true });
+    expect(dbMocks.deletePvpMatch).toHaveBeenCalledWith(12, 91);
+    await expect(caller.pvp.delete({ id: 92 })).rejects.toThrow();
+    expect(dbMocks.deletePvpMatch).toHaveBeenLastCalledWith(12, 92);
   });
 });

@@ -9,6 +9,7 @@ import {
   users,
 } from "../drizzle/schema";
 import type { ImportedMatch, ParsedPvpImport } from "./pvpImport";
+import { buildPvpImportReconciliationPlan } from "./pvpImportReconciliation";
 import { buildDashboardStats } from "./pvpStats";
 import { ENV } from "./_core/env";
 
@@ -144,6 +145,8 @@ export async function recordPvpImport(userId: number, label: string, parsed: Par
   const db = await requireDb();
   const id = randomUUID();
   const receivedAt = Date.now();
+  let createdCount = 0;
+  let updatedCount = 0;
   await db.transaction(async tx => {
     await tx.insert(pvpImportBatches).values({
       id,
@@ -156,10 +159,25 @@ export async function recordPvpImport(userId: number, label: string, parsed: Par
       rawPayload: parsed.rawPayload,
     });
     if (parsed.records.length) {
-      await tx.insert(pvpMatches).values(parsed.records.map(record => importValues(record, userId, id)));
+      const existingMatches = await tx.select().from(pvpMatches).where(eq(pvpMatches.userId, userId));
+      const plan = buildPvpImportReconciliationPlan(userId, existingMatches, parsed.records);
+      for (const update of plan.updates) {
+        await tx.update(pvpMatches).set({
+          outcome: update.outcome,
+          rankBefore: update.rankBefore ?? null,
+          rankAfter: update.rankAfter ?? null,
+          rawPayload: update.rawPayload,
+          unrecognizedFields: update.unrecognizedFields ?? null,
+        }).where(and(eq(pvpMatches.id, update.existingId), eq(pvpMatches.userId, userId)));
+        updatedCount += 1;
+      }
+      if (plan.inserts.length) {
+        await tx.insert(pvpMatches).values(plan.inserts.map(record => importValues(record, userId, id)));
+        createdCount = plan.inserts.length;
+      }
     }
   });
-  return { id, receivedAt };
+  return { id, receivedAt, createdCount, updatedCount };
 }
 
 export async function listPvpImportBatches(userId: number) {

@@ -118,8 +118,8 @@ describe("parsePvpImportPayload", () => {
       mode: "1v1",
       outcome: "unknown",
       opponentName: "真實對手",
+      sourceBattleChannel: "pvp_battle:example",
       unrecognizedFields: {
-        sourceBattleChannel: "pvp_battle:example",
         terminalAction: "medals",
       },
     });

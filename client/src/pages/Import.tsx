@@ -1,16 +1,11 @@
 import { BlueprintTag, EmptyData } from "@/components/PvpUi";
 import { Button } from "@/components/ui/button";
 import { formatLocalDateTime } from "@/lib/localTime";
+import { uploadPvpImportChunks, type PvpImportUploadSummary } from "@/lib/pvpImportUpload";
 import { trpc } from "@/lib/trpc";
 import { AlertTriangle, ClipboardPaste, Database, FileJson, Upload } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-
-type ImportResult = {
-  importedCount: number;
-  rejectedCount: number;
-  warnings: string[];
-};
 
 const MAX_IMPORT_FILE_BYTES = 25_000_000;
 
@@ -18,34 +13,50 @@ export default function Import() {
   const utils = trpc.useUtils();
   const [label, setLabel] = useState("PVP 守衛 JSON 匯出");
   const [dataText, setDataText] = useState("");
-  const [result, setResult] = useState<ImportResult | null>(null);
+  const [result, setResult] = useState<PvpImportUploadSummary | null>(null);
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
   const imports = trpc.pvp.listImports.useQuery();
 
-  const upload = trpc.pvp.importJson.useMutation({
-    onSuccess: async data => {
-      setResult(data);
-      setDataText("");
-      await utils.pvp.invalidate();
-      toast.success(`已建立匯入批次；辨識 ${data.importedCount} 筆對戰。`);
-    },
-    onError: error => toast.error(error.message),
-  });
+  const upload = trpc.pvp.importJson.useMutation();
 
   const readFile = (file?: File) => {
     if (!file) return;
-    if (file.size > MAX_IMPORT_FILE_BYTES) {
-      toast.error("JSON 檔案超過 25MB 匯入上限，請先縮小或分批匯入。");
-      return;
-    }
     const reader = new FileReader();
-    reader.onload = () => setDataText(String(reader.result || ""));
+    reader.onload = () => {
+      setDataText(String(reader.result || ""));
+      if (file.size > MAX_IMPORT_FILE_BYTES) {
+        toast.info(`已載入 ${(file.size / 1_000_000).toFixed(1)}MB 檔案；匯入時會自動分批。`);
+      }
+    };
     reader.onerror = () => toast.error("無法讀取此檔案。");
     reader.readAsText(file);
   };
 
-  const submit = (event: React.FormEvent) => {
+  const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    upload.mutate({ label, dataText });
+    try {
+      setResult(null);
+      const summary = await uploadPvpImportChunks({
+        label,
+        dataText,
+        uploadChunk: input => upload.mutateAsync(input),
+        onProgress: setBatchProgress,
+      });
+      setResult(summary);
+      await utils.pvp.invalidate();
+      if (summary.failure) {
+        toast.error(`第 ${summary.failure.current}/${summary.failure.total} 批匯入失敗；先前 ${summary.completedChunks} 批已保留。${summary.failure.message}`);
+        return;
+      }
+      setDataText("");
+      toast.success(summary.totalChunks > 1
+        ? `已完成 ${summary.totalChunks} 批匯入；新建 ${summary.createdCount} 筆、回填 ${summary.updatedCount} 筆。`
+        : `匯入完成；新建 ${summary.createdCount} 筆、回填 ${summary.updatedCount} 筆。`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "匯入失敗，請稍後重試。");
+    } finally {
+      setBatchProgress(null);
+    }
   };
 
   return (
@@ -64,7 +75,7 @@ export default function Import() {
             <FileJson size={21} />
             <div>
               <h2>JSON 匯入入口</h2>
-              <p>系統會建立一個可回查的匯入批次，最多解析 100 筆候選資料；完整原始封包匯出支援至 25MB。</p>
+              <p>每批最多解析 100 筆候選資料；完整原始封包超過 24MB 時，系統會自動拆成多批循序匯入。</p>
             </div>
           </header>
           <label>
@@ -74,7 +85,7 @@ export default function Import() {
           <label className="file-drop">
             <span>從檔案載入</span>
             <input type="file" accept="application/json,.json" onChange={event => readFile(event.target.files?.[0])} />
-            <Upload size={17} />選擇 .json 檔案
+            <Upload size={17} />選擇 .json 檔案（大型檔案會自動分批）
           </label>
           <label className="wide-label">
             <span>JSON 內容 <b>*</b></span>
@@ -89,8 +100,11 @@ export default function Import() {
             <AlertTriangle size={16} />
             <p><b>辨識原則：</b>系統只在時間、模式與雙方非空隊伍可對應時建立戰績。`1v1`／`3v3` 會保留為遊戲模式，終局快照中的完整角色陣容不會被截斷；其他資料不會被丟棄，而是原樣保留在這個匯入批次中。</p>
           </div>
-          <Button type="submit" className="blueprint-button primary-button" disabled={upload.isPending || !dataText.trim()}>
-            {upload.isPending ? "驗證與保存中…" : <><ClipboardPaste size={16} />驗證並匯入</>}
+          {batchProgress && (
+            <p className="import-progress" aria-live="polite">正在匯入第 {batchProgress.current} / {batchProgress.total} 批，請勿關閉此頁…</p>
+          )}
+          <Button type="submit" className="blueprint-button primary-button" disabled={upload.isPending || Boolean(batchProgress) || !dataText.trim()}>
+            {batchProgress || upload.isPending ? "驗證與保存中…" : <><ClipboardPaste size={16} />驗證並匯入</>}
           </Button>
         </form>
 
@@ -112,8 +126,9 @@ export default function Import() {
         <section className="import-result technical-frame">
           <Database size={18} />
           <div>
-            <h2>本次匯入已完成</h2>
-            <p>建立 <b>{result.importedCount}</b> 筆戰績，另有 <b>{result.rejectedCount}</b> 筆未建立。未建立的原始資料仍在匯入批次中完整保留。</p>
+            <h2>{result.failure ? "本次匯入部分完成" : "本次匯入已完成"}</h2>
+            <p>辨識 <b>{result.importedCount}</b> 筆資料：新建 <b>{result.createdCount}</b> 筆、回填既有戰績 <b>{result.updatedCount}</b> 筆，另有 <b>{result.rejectedCount}</b> 筆未建立。未建立的原始資料仍在匯入批次中完整保留。</p>
+            {result.failure && <p className="warning-line">注意：第 {result.failure.current} / {result.failure.total} 批失敗；前 {result.completedChunks} 批已完成並保存。錯誤：{result.failure.message}</p>}
             {result.warnings.map((warning, index) => <p className="warning-line" key={index}>注意：{warning}</p>)}
           </div>
         </section>

@@ -9,6 +9,8 @@ export type ImportedMatch = {
   opponentName?: string;
   rankBefore?: number;
   rankAfter?: number;
+  sourceBattleChannel?: string;
+  sourceBattleId?: string;
   rawPayload: unknown;
   unrecognizedFields?: Record<string, unknown>;
 };
@@ -25,6 +27,7 @@ const knownKeys = new Set([
   "type", "outcome", "result", "winner", "status", "playerTeam", "player_team", "myTeam", "my_team", "team",
   "opponentTeam", "opponent_team", "enemyTeam", "enemy_team", "opponent", "opponentName", "opponent_name",
   "rankBefore", "rank_before", "preRank", "pre_rank", "rankAfter", "rank_after", "postRank", "post_rank",
+  "sourceBattleChannel", "source_battle_channel", "sourceBattleId", "source_battle_id",
 ]);
 
 function objectValue(value: unknown): Record<string, unknown> | null {
@@ -51,6 +54,12 @@ function normaliseTimestamp(value: unknown): number | null {
 function normaliseRank(value: unknown): number | undefined {
   const numberValue = typeof value === "number" ? value : Number(value);
   return Number.isInteger(numberValue) && numberValue > 0 ? numberValue : undefined;
+}
+
+function normaliseSourceIdentifier(value: unknown): string | undefined {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(Math.trunc(value));
+  return undefined;
 }
 
 function normaliseMode(value: unknown, playerCount: number): "1v1" | "3v3" | null {
@@ -145,6 +154,8 @@ export function parsePvpImportPayload(dataText: string): ParsedPvpImport {
         : undefined,
       rankBefore: normaliseRank(firstValue(record, ["rankBefore", "rank_before", "preRank", "pre_rank"])),
       rankAfter: normaliseRank(firstValue(record, ["rankAfter", "rank_after", "postRank", "post_rank"])),
+      sourceBattleChannel: normaliseSourceIdentifier(firstValue(record, ["sourceBattleChannel", "source_battle_channel"])),
+      sourceBattleId: normaliseSourceIdentifier(firstValue(record, ["sourceBattleId", "source_battle_id"])),
       rawPayload: record,
       ...(Object.keys(unrecognizedFields).length ? { unrecognizedFields } : {}),
     });

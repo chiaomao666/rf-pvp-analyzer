@@ -67,6 +67,8 @@ export const pvpRouter = router({
     return {
       batchId: batch.id,
       importedCount: parsed.records.length,
+      createdCount: batch.createdCount,
+      updatedCount: batch.updatedCount,
       rejectedCount: parsed.rejectedCount,
       warnings: parsed.warnings,
     };
