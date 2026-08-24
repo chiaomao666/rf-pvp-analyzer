@@ -11,7 +11,32 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      window.__RF_PVP_DIRECT_FILE_OPEN__ = window.location.protocol === "file:";
+
+      if (window.__RF_PVP_DIRECT_FILE_OPEN__) {
+        document.getElementById("root").innerHTML = `
+          <main style="min-height:100vh;display:grid;place-items:center;padding:24px;background:#06173a;color:#e8f3ff;font-family:'Noto Sans TC',system-ui,sans-serif;box-sizing:border-box">
+            <section style="max-width:680px;border:1px solid #36c9ff;background:#092251;padding:32px;box-shadow:0 0 0 1px rgba(54,201,255,.18) inset">
+              <p style="margin:0 0 8px;color:#66dcff;font:700 13px/1.5 'Space Mono',monospace;letter-spacing:.12em">RF PVP ANALYZER / LOCAL START REQUIRED</p>
+              <h1 style="margin:0 0 16px;font-size:32px;line-height:1.25">這是原始碼入口，不能直接開啟</h1>
+              <p style="margin:0 0 24px;line-height:1.8;color:#c2d9f5">你目前以 <code>file://</code> 方式開啟 <code>client/index.html</code>。本網站需要本機 Node.js 伺服器、API 與 MySQL 資料庫，因此不會在這個頁面直接運作。</p>
+              <ol style="margin:0 0 24px;padding-left:24px;line-height:2;color:#e8f3ff">
+                <li>回到解壓後的專案根目錄。</li>
+                <li>雙擊 <strong>START_WINDOWS.bat</strong>。</li>
+                <li>第一次請依畫面指示填妥 <code>.env</code> 的 MySQL 資料庫設定。</li>
+                <li>看到伺服器啟動後，再開啟 <a href="http://localhost:3000" style="color:#66dcff;font-weight:700">http://localhost:3000</a>。</li>
+              </ol>
+              <p style="margin:0;color:#90aeca;font-size:14px">詳細步驟請閱讀專案根目錄的 <code>README.md</code>。</p>
+            </section>
+          </main>`;
+      }
+    </script>
+    <script type="module">
+      if (!window.__RF_PVP_DIRECT_FILE_OPEN__) {
+        import("/src/main.tsx");
+      }
+    </script>
     <script defer src="%VITE_ANALYTICS_ENDPOINT%/umami" data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"></script>
   </body>
 </html>

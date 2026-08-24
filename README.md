@@ -15,7 +15,17 @@
 
 ## 本機啟動
 
-先複製環境範本、填入資料庫連線字串，接著安裝相依套件並建立資料表。
+> **不要直接雙擊 `client/index.html`。** 它是 Vite 的 TypeScript／React 原始入口，不是可離線開啟的 HTML 成品；以 `file:///.../client/index.html` 開啟時沒有 Vite、Express、tRPC API 或資料庫，所以瀏覽器只會顯示空白頁。
+
+### Windows 最簡單方式
+
+先安裝 [Node.js 22+](https://nodejs.org/)，在 PowerShell 執行一次 `corepack enable` 以啟用 pnpm。接著在解壓後的專案根目錄**雙擊 `START_WINDOWS.bat`**。
+
+第一次執行會建立並開啟 `.env`。請填入可連線的 MySQL `DATABASE_URL` 與足夠長的 `JWT_SECRET`，存檔後再雙擊 `START_WINDOWS.bat`。它會安裝套件、套用資料庫結構並啟動伺服器；完成後請在瀏覽器開啟 **http://localhost:3000**，不要開啟 `client/index.html`。
+
+### 手動啟動方式
+
+如不使用 Windows 批次檔，先複製環境範本、填入資料庫連線字串，接著安裝相依套件並建立資料表。
 
 ```bash
 cp env.template .env
