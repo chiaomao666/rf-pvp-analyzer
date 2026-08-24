@@ -5,6 +5,9 @@ import * as db from "../db";
 import { parsePvpImportPayload } from "../pvpImport";
 import { protectedProcedure, router } from "../_core/trpc";
 
+/** 完整守衛匯出含 rawEvents；保留上限以避免單一請求不受控膨脹。 */
+const MAX_PVP_IMPORT_TEXT_LENGTH = 5_000_000;
+
 const teamMemberSchema = z.object({
   name: z.string().trim().min(1, "請填寫角色名稱").max(100),
   level: z.number().int().positive().max(999).optional(),
@@ -57,7 +60,7 @@ export const pvpRouter = router({
   }),
   importJson: protectedProcedure.input(z.object({
     label: z.string().trim().min(1).max(120),
-    dataText: z.string().min(2).max(512_000),
+    dataText: z.string().min(2).max(MAX_PVP_IMPORT_TEXT_LENGTH),
   })).mutation(async ({ ctx, input }) => {
     const parsed = parsePvpImportPayload(input.dataText);
     const batch = await db.recordPvpImport(ctx.user.id, input.label, parsed);

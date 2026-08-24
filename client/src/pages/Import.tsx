@@ -11,6 +11,8 @@ type ImportResult = {
   warnings: string[];
 };
 
+const MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024;
+
 export default function Import() {
   const utils = trpc.useUtils();
   const [label, setLabel] = useState("PVP 守衛 JSON 匯出");
@@ -30,6 +32,10 @@ export default function Import() {
 
   const readFile = (file?: File) => {
     if (!file) return;
+    if (file.size > MAX_IMPORT_FILE_BYTES) {
+      toast.error("JSON 檔案超過 5MB 安全上限，請先縮小或分批匯入。");
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => setDataText(String(reader.result || ""));
     reader.onerror = () => toast.error("無法讀取此檔案。");
@@ -57,7 +63,7 @@ export default function Import() {
             <FileJson size={21} />
             <div>
               <h2>JSON 匯入入口</h2>
-              <p>系統會建立一個可回查的匯入批次，最多解析 100 筆候選資料。</p>
+              <p>系統會建立一個可回查的匯入批次，最多解析 100 筆候選資料；完整原始封包匯出支援至 5MB。</p>
             </div>
           </header>
           <label>

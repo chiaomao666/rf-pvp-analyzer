@@ -4,6 +4,7 @@ const dbMocks = vi.hoisted(() => ({
   createPvpMatch: vi.fn(),
   getPvpMatch: vi.fn(),
   listPvpMatches: vi.fn(),
+  recordPvpImport: vi.fn(),
 }));
 
 vi.mock("./db", () => dbMocks);
@@ -73,5 +74,35 @@ describe("pvp.create", () => {
       opponentTeam,
       source: "manual",
     }));
+  });
+});
+
+describe("pvp.importJson", () => {
+  const validRecord = {
+    battleAt: 1_725_000_300_000,
+    mode: "1v1",
+    outcome: "unknown",
+    playerTeam: [{ name: "己方角色", level: 100 }],
+    opponentTeam: [{ name: "對方角色", level: 100 }],
+  };
+
+  it("接受超過舊 512KB 限制的完整守衛匯出，並交由使用者範圍的批次保存", async () => {
+    dbMocks.recordPvpImport.mockResolvedValue({ id: "batch-large-export" });
+    const caller = appRouter.createCaller(authenticatedContext(12));
+    const fullExportText = JSON.stringify({ records: [validRecord], rawEvents: [] }).padEnd(2_050_242, " ");
+
+    await expect(caller.pvp.importJson({ label: "完整守衛匯出", dataText: fullExportText })).resolves.toMatchObject({
+      batchId: "batch-large-export",
+      importedCount: 1,
+      rejectedCount: 0,
+    });
+    expect(dbMocks.recordPvpImport).toHaveBeenCalledWith(12, "完整守衛匯出", expect.objectContaining({
+      records: [expect.objectContaining({ mode: "1v1" })],
+    }));
+  });
+
+  it("仍拒絕超過 5MB 安全界線的字串", async () => {
+    const caller = appRouter.createCaller(authenticatedContext(12));
+    await expect(caller.pvp.importJson({ label: "過大匯出", dataText: " ".repeat(5_000_001) })).rejects.toThrow();
   });
 });
