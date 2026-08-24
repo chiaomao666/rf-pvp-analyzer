@@ -20,6 +20,7 @@ export type ParsedPvpImport = {
   records: ImportedMatch[];
   rejectedCount: number;
   warnings: string[];
+  sourceCharacterCount?: number;
 };
 
 const knownKeys = new Set([
@@ -161,7 +162,7 @@ export function parsePvpImportPayload(dataText: string): ParsedPvpImport {
     });
   }
 
-  if (inputRecords(root).length > 100) warnings.push("單次僅處理前 100 筆資料；完整原始 JSON 仍會保存於匯入批次。\n");
-  if (records.length === 0) warnings.push("未偵測到可建立的對戰紀錄。這類資料仍會保留於匯入批次，供後續檢視與擴充辨識規則。");
-  return { rawPayload: root, records, rejectedCount, warnings };
+  if (inputRecords(root).length > 100) warnings.push("單次僅處理前 100 筆資料；匯入批次只保存安全摘要，已建立戰績會保留其來源資料。\n");
+  if (records.length === 0) warnings.push("未偵測到可建立的對戰紀錄。匯入批次會保留安全摘要，供後續檢視與擴充辨識規則。");
+  return { rawPayload: root, records, rejectedCount, warnings, sourceCharacterCount: dataText.length };
 }

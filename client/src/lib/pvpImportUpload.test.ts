@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { uploadPvpImportChunks } from "./pvpImportUpload";
+import { getSafeImportFailureMessage, uploadPvpImportChunks } from "./pvpImportUpload";
 
 const payload = JSON.stringify({
   format: "rf-pvp-analyzer/v1",
@@ -64,5 +64,11 @@ describe("uploadPvpImportChunks", () => {
       completedChunks: 1,
       failure: { current: 2, total: 2, message: "網路連線中斷" },
     });
+  });
+
+  it("不會把資料庫 SQL 或巨型原始 JSON 顯示在失敗摘要中", () => {
+    const unsafe = new Error(`Failed query: insert into pvpImportBatches values (${JSON.stringify({ payload: "giant-raw-payload".repeat(1_000) })})`);
+
+    expect(getSafeImportFailureMessage(unsafe)).toBe("這一批資料尚未保存；請稍後重試。");
   });
 });

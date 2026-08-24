@@ -26,6 +26,16 @@ type UploadArguments = {
   maxBytes?: number;
 };
 
+const SAFE_IMPORT_FAILURE = "這一批資料尚未保存；請稍後重試。";
+
+export function getSafeImportFailureMessage(error: unknown) {
+  const message = error instanceof Error ? error.message.replace(/\s+/g, " ").trim() : "";
+  if (!message || message.length > 240 || /(failed query|insert into|update |delete |select |rawpayload|values\s*\()/i.test(message)) {
+    return SAFE_IMPORT_FAILURE;
+  }
+  return message;
+}
+
 /**
  * 逐批提交守衛匯出，故意在第一個失敗批次停止；已完成批次的統計會原樣保留，避免使用者誤以為整次匯入均未寫入。
  */
@@ -60,7 +70,7 @@ export async function uploadPvpImportChunks({
       summary.warnings.push(...result.warnings.map(warning => `第 ${current} 批：${warning}`));
       summary.completedChunks = current;
     } catch (error) {
-      const message = error instanceof Error ? error.message : "匯入失敗，請稍後重試。";
+      const message = getSafeImportFailureMessage(error);
       return {
         ...summary,
         failure: { current, total: chunks.length, message },

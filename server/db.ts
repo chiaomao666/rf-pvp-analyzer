@@ -141,6 +141,38 @@ function importValues(record: ImportedMatch, userId: number, batchId: string) {
   };
 }
 
+function summaryString(value: unknown, maxLength = 160) {
+  return typeof value === "string" && value.trim()
+    ? value.trim().slice(0, maxLength)
+    : undefined;
+}
+
+/**
+ * 匯入批次只保留可追溯的 metadata；完整根 JSON 可能接近請求上限，
+ * 應僅由各筆可建立戰績的 rawPayload 保存，不能再重複寫入 JSON 欄位。
+ */
+export function buildPvpImportBatchSummary(parsed: ParsedPvpImport) {
+  const source = parsed.rawPayload !== null && typeof parsed.rawPayload === "object" && !Array.isArray(parsed.rawPayload)
+    ? parsed.rawPayload as Record<string, unknown>
+    : {};
+  const chunk = source.chunk !== null && typeof source.chunk === "object" && !Array.isArray(source.chunk)
+    ? source.chunk as Record<string, unknown>
+    : undefined;
+
+  return {
+    format: "rf-pvp-analyzer/import-summary-v1",
+    sourceFormat: summaryString(source.format),
+    exportedAt: summaryString(source.exportedAt),
+    exportedAtLocal: summaryString(source.exportedAtLocal),
+    sourceCharacterCount: parsed.sourceCharacterCount ?? null,
+    acceptedRecordCount: parsed.records.length,
+    rejectedRecordCount: parsed.rejectedCount,
+    ...(chunk && typeof chunk.index === "number" && typeof chunk.total === "number"
+      ? { chunk: { index: chunk.index, total: chunk.total } }
+      : {}),
+  };
+}
+
 export async function recordPvpImport(userId: number, label: string, parsed: ParsedPvpImport) {
   const db = await requireDb();
   const id = randomUUID();
@@ -156,7 +188,7 @@ export async function recordPvpImport(userId: number, label: string, parsed: Par
       recognizedCount: parsed.records.length,
       rejectedCount: parsed.rejectedCount,
       warnings: parsed.warnings,
-      rawPayload: parsed.rawPayload,
+      rawPayload: buildPvpImportBatchSummary(parsed),
     });
     if (parsed.records.length) {
       const existingMatches = await tx.select().from(pvpMatches).where(eq(pvpMatches.userId, userId));

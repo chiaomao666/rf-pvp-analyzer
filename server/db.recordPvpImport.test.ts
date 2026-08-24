@@ -139,4 +139,29 @@ describe("recordPvpImport transaction reconciliation", () => {
       rankAfter: 878,
     })]);
   });
+
+  it("大型根 JSON 僅以受限摘要寫入批次，不重複保存巨型原始內容", async () => {
+    const giantMarker = "giant-raw-payload";
+    const largeParsed: ParsedPvpImport = {
+      ...parsed([officialRecord]),
+      rawPayload: {
+        format: "rf-pvp-analyzer/v1",
+        exportedAt: "2026-08-25T00:00:00.000Z",
+        rawEvents: [{ marker: giantMarker, payload: "x".repeat(2_000_000) }],
+      },
+      sourceCharacterCount: 24_000_000,
+    };
+
+    await recordPvpImport(12, "大型守衛匯出", largeParsed);
+
+    const batch = dataLayer.state.batchInserts[0] as { rawPayload: Record<string, unknown> };
+    expect(batch.rawPayload).toMatchObject({
+      format: "rf-pvp-analyzer/import-summary-v1",
+      sourceFormat: "rf-pvp-analyzer/v1",
+      sourceCharacterCount: 24_000_000,
+      acceptedRecordCount: 1,
+    });
+    expect(JSON.stringify(batch.rawPayload)).not.toContain(giantMarker);
+    expect(JSON.stringify(batch.rawPayload).length).toBeLessThan(1_000);
+  });
 });

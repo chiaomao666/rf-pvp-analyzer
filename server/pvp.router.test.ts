@@ -146,6 +146,16 @@ describe("pvp.importJson", () => {
     const caller = appRouter.createCaller(authenticatedContext(12));
     await expect(caller.pvp.importJson({ label: "過大匯出", dataText: " ".repeat(25_000_001) })).rejects.toThrow();
   });
+
+  it("資料庫失敗時不將 SQL 或原始 JSON 透傳至匯入頁", async () => {
+    dbMocks.recordPvpImport.mockRejectedValueOnce(new Error("Failed query: insert into pvpImportBatches values ('giant-raw-payload')"));
+    const caller = appRouter.createCaller(authenticatedContext(12));
+
+    await expect(caller.pvp.importJson({
+      label: "資料庫失敗遮罩",
+      dataText: JSON.stringify({ records: [validRecord] }),
+    })).rejects.toThrow("匯入批次暫時無法保存");
+  });
 });
 
 describe("pvp.delete", () => {

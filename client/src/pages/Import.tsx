@@ -65,7 +65,7 @@ export default function Import() {
         <div>
           <p className="eyebrow">IMPORT / PRESERVED RAW PAYLOAD</p>
           <h1>匯入資料<span className="title-underscore">_</span></h1>
-          <p>可貼上或上傳 PVP 守衛腳本匯出的 JSON；無法辨識的欄位與原始內容會一併保存。</p>
+          <p>可貼上或上傳 PVP 守衛腳本匯出的 JSON；已建立或回填的戰績會保留其來源資料，匯入批次則保存可追溯摘要。</p>
         </div>
       </section>
 
@@ -98,7 +98,7 @@ export default function Import() {
           </label>
           <div className="import-note">
             <AlertTriangle size={16} />
-            <p><b>辨識原則：</b>系統只在時間、模式與雙方非空隊伍可對應時建立戰績。`1v1`／`3v3` 會保留為遊戲模式，終局快照中的完整角色陣容不會被截斷；其他資料不會被丟棄，而是原樣保留在這個匯入批次中。</p>
+            <p><b>辨識原則：</b>系統只在時間、模式與雙方非空隊伍可對應時建立戰績。`1v1`／`3v3` 會保留為遊戲模式，終局快照中的完整角色陣容不會被截斷；大型匯入的批次層只保存安全摘要，避免重複儲存整份原始封包。</p>
           </div>
           {batchProgress && (
             <p className="import-progress" aria-live="polite">正在匯入第 {batchProgress.current} / {batchProgress.total} 批，請勿關閉此頁…</p>
@@ -118,7 +118,7 @@ export default function Import() {
             <div><dt>結果</dt><dd>outcome、result、winner、status</dd></div>
             <div><dt>排名</dt><dd>rankBefore / rankAfter 與常見別名</dd></div>
           </dl>
-          <BlueprintTag>RAW PAYLOAD RETAINED</BlueprintTag>
+          <BlueprintTag>MATCH RAW · BATCH SUMMARY</BlueprintTag>
         </aside>
       </section>
 
@@ -127,7 +127,7 @@ export default function Import() {
           <Database size={18} />
           <div>
             <h2>{result.failure ? "本次匯入部分完成" : "本次匯入已完成"}</h2>
-            <p>辨識 <b>{result.importedCount}</b> 筆資料：新建 <b>{result.createdCount}</b> 筆、回填既有戰績 <b>{result.updatedCount}</b> 筆，另有 <b>{result.rejectedCount}</b> 筆未建立。未建立的原始資料仍在匯入批次中完整保留。</p>
+            <p>辨識 <b>{result.importedCount}</b> 筆資料：新建 <b>{result.createdCount}</b> 筆、回填既有戰績 <b>{result.updatedCount}</b> 筆，另有 <b>{result.rejectedCount}</b> 筆未建立。已建立或回填的戰績會保留來源資料；匯入批次保留可追溯摘要。</p>
             {result.failure && <p className="warning-line">注意：第 {result.failure.current} / {result.failure.total} 批失敗；前 {result.completedChunks} 批已完成並保存。錯誤：{result.failure.message}</p>}
             {result.warnings.map((warning, index) => <p className="warning-line" key={index}>注意：{warning}</p>)}
           </div>

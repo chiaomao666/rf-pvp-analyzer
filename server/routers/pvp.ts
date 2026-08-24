@@ -63,7 +63,16 @@ export const pvpRouter = router({
     dataText: z.string().min(2).max(MAX_PVP_IMPORT_TEXT_LENGTH),
   })).mutation(async ({ ctx, input }) => {
     const parsed = parsePvpImportPayload(input.dataText);
-    const batch = await db.recordPvpImport(ctx.user.id, input.label, parsed);
+    let batch: Awaited<ReturnType<typeof db.recordPvpImport>>;
+    try {
+      batch = await db.recordPvpImport(ctx.user.id, input.label, parsed);
+    } catch {
+      // 不將 ORM/SQL 例外（可能含完整原始 JSON）透傳至瀏覽器。
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "匯入批次暫時無法保存，這一批資料尚未寫入；請稍後重試。",
+      });
+    }
     return {
       batchId: batch.id,
       importedCount: parsed.records.length,
