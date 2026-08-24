@@ -101,8 +101,20 @@ describe("pvp.importJson", () => {
     }));
   });
 
-  it("仍拒絕超過 5MB 安全界線的字串", async () => {
+  it("接受剛好 25MB 的完整原始封包匯出", async () => {
+    dbMocks.recordPvpImport.mockResolvedValue({ id: "batch-25mb-export" });
     const caller = appRouter.createCaller(authenticatedContext(12));
-    await expect(caller.pvp.importJson({ label: "過大匯出", dataText: " ".repeat(5_000_001) })).rejects.toThrow();
+    const fullExportText = JSON.stringify({ records: [validRecord], rawEvents: [] }).padEnd(25_000_000, " ");
+
+    await expect(caller.pvp.importJson({ label: "25MB 完整守衛匯出", dataText: fullExportText })).resolves.toMatchObject({
+      batchId: "batch-25mb-export",
+      importedCount: 1,
+      rejectedCount: 0,
+    });
+  });
+
+  it("仍拒絕超過 25MB 匯入上限的字串", async () => {
+    const caller = appRouter.createCaller(authenticatedContext(12));
+    await expect(caller.pvp.importJson({ label: "過大匯出", dataText: " ".repeat(25_000_001) })).rejects.toThrow();
   });
 });

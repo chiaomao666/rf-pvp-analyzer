@@ -5,8 +5,8 @@ import * as db from "../db";
 import { parsePvpImportPayload } from "../pvpImport";
 import { protectedProcedure, router } from "../_core/trpc";
 
-/** 完整守衛匯出含 rawEvents；保留上限以避免單一請求不受控膨脹。 */
-const MAX_PVP_IMPORT_TEXT_LENGTH = 5_000_000;
+/** 完整守衛匯出含 rawEvents；25MB 足以保存長對戰歷程，仍保留單次請求邊界。 */
+const MAX_PVP_IMPORT_TEXT_LENGTH = 25_000_000;
 
 const teamMemberSchema = z.object({
   name: z.string().trim().min(1, "請填寫角色名稱").max(100),
