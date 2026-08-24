@@ -1,0 +1,36 @@
+import { BlueprintTag } from "@/components/PvpUi";
+import { Button } from "@/components/ui/button";
+import { trpc } from "@/lib/trpc";
+import { Check, ChevronRight, ClipboardPenLine, Upload } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import { Link, useLocation } from "wouter";
+
+type EditableMember = { name: string; level: string; power: string; role: string };
+const blankMember = (): EditableMember => ({ name: "", level: "", power: "", role: "" });
+
+function makeTeam(size: number) { return Array.from({ length: size }, blankMember); }
+function toNumber(value: string) { return value.trim() ? Number(value) : undefined; }
+
+export default function Record() {
+  const [, navigate] = useLocation();
+  const utils = trpc.useUtils();
+  const [mode, setMode] = useState<"1v1" | "3v3">("1v1");
+  const [outcome, setOutcome] = useState<"win" | "loss" | "draw" | "unknown">("win");
+  const [battleAt, setBattleAt] = useState(() => new Date().toISOString().slice(0, 16));
+  const [opponentName, setOpponentName] = useState("");
+  const [rankBefore, setRankBefore] = useState("");
+  const [rankAfter, setRankAfter] = useState("");
+  const [notes, setNotes] = useState("");
+  const [playerTeam, setPlayerTeam] = useState<EditableMember[]>(makeTeam(1));
+  const [opponentTeam, setOpponentTeam] = useState<EditableMember[]>(makeTeam(1));
+  const create = trpc.pvp.create.useMutation({ onSuccess: async () => { await utils.pvp.invalidate(); toast.success("排名戰紀錄已安全保存。"); navigate("/"); }, onError: error => toast.error(error.message) });
+  const teamSize = mode === "1v1" ? 1 : 3;
+  const changeMode = (nextMode: "1v1" | "3v3") => { const size = nextMode === "1v1" ? 1 : 3; setMode(nextMode); setPlayerTeam(current => [...current.slice(0, size), ...makeTeam(Math.max(0, size - current.length))]); setOpponentTeam(current => [...current.slice(0, size), ...makeTeam(Math.max(0, size - current.length))]); };
+  const updateMember = (side: "player" | "opponent", index: number, key: keyof EditableMember, value: string) => { const setter = side === "player" ? setPlayerTeam : setOpponentTeam; setter(current => current.map((member, memberIndex) => memberIndex === index ? { ...member, [key]: value } : member)); };
+  const convertTeam = (team: EditableMember[]) => team.map(member => ({ name: member.name.trim(), ...(toNumber(member.level) ? { level: toNumber(member.level) } : {}), ...(toNumber(member.power) !== undefined ? { power: toNumber(member.power) } : {}), ...(member.role.trim() ? { role: member.role.trim() } : {}) }));
+  const submit = (event: React.FormEvent) => { event.preventDefault(); const timestamp = new Date(battleAt).getTime(); if (!timestamp) { toast.error("請填寫有效的對戰時間。"); return; } create.mutate({ battleAt: timestamp, mode, outcome, playerTeam: convertTeam(playerTeam), opponentTeam: convertTeam(opponentTeam), ...(opponentName.trim() ? { opponentName: opponentName.trim() } : {}), ...(toNumber(rankBefore) ? { rankBefore: toNumber(rankBefore) } : {}), ...(toNumber(rankAfter) ? { rankAfter: toNumber(rankAfter) } : {}), ...(notes.trim() ? { notes: notes.trim() } : {}) }); };
+  return <div className="page-enter"><section className="page-titlebar compact-titlebar"><div><p className="eyebrow">MANUAL ENTRY / STRUCTURED BATTLE DATA</p><h1>新增對戰<span className="title-underscore">_</span></h1><p>每次儲存都會綁定目前登入身分；不會寫入其他使用者的資料庫。</p></div><Link href="/import"><Button variant="outline" className="blueprint-button secondary-button"><Upload size={16} />改用 JSON 匯入</Button></Link></section><form className="record-form" onSubmit={submit}><section className="form-section technical-frame"><header><span>01</span><div><h2>戰鬥條件</h2><p>基本識別欄位與排名位置。</p></div></header><div className="form-grid"><label><span>對戰時間 <b>*</b></span><input type="datetime-local" value={battleAt} onChange={event => setBattleAt(event.target.value)} required /></label><label><span>對戰模式 <b>*</b></span><div className="segmented-control"><button type="button" className={mode === "1v1" ? "selected" : ""} onClick={() => changeMode("1v1")}>1v1</button><button type="button" className={mode === "3v3" ? "selected" : ""} onClick={() => changeMode("3v3")}>3v3</button></div></label><label><span>對戰結果 <b>*</b></span><select value={outcome} onChange={event => setOutcome(event.target.value as typeof outcome)}><option value="win">勝利</option><option value="loss">敗北</option><option value="draw">平手</option><option value="unknown">待確認</option></select></label><label><span>對手名稱</span><input maxLength={120} value={opponentName} onChange={event => setOpponentName(event.target.value)} placeholder="選填" /></label><label><span>賽前排名</span><input inputMode="numeric" value={rankBefore} onChange={event => setRankBefore(event.target.value)} placeholder="例如 120" /></label><label><span>賽後排名</span><input inputMode="numeric" value={rankAfter} onChange={event => setRankAfter(event.target.value)} placeholder="例如 112" /></label></div></section><section className="team-entry-grid"><TeamForm title="我的隊伍" index="02" members={playerTeam} onChange={(index, key, value) => updateMember("player", index, key, value)} /><TeamForm title="對手隊伍" index="03" members={opponentTeam} onChange={(index, key, value) => updateMember("opponent", index, key, value)} opponent /></section><section className="form-section technical-frame"><header><span>04</span><div><h2>備註與保存</h2><p>備註可記錄配隊策略、異常情況或賽後觀察。</p></div></header><label className="wide-label"><span>對戰備註</span><textarea value={notes} onChange={event => setNotes(event.target.value)} maxLength={3000} placeholder="選填；最多 3,000 字。" /></label><div className="form-confirm"><span><Check size={15} />將以目前登入使用者身分保存。</span><Button type="submit" className="blueprint-button primary-button" disabled={create.isPending}>{create.isPending ? "保存中…" : <><ClipboardPenLine size={16} />保存排名戰</>}</Button></div></section></form></div>;
+}
+
+function TeamForm({ title, index, members, onChange, opponent = false }: { title: string; index: string; members: EditableMember[]; onChange: (index: number, key: keyof EditableMember, value: string) => void; opponent?: boolean }) { return <section className={`team-form technical-frame ${opponent ? "team-form-opponent" : ""}`}><header><span>{index}</span><div><h2>{title}</h2><p>{members.length} 名角色 · 所有角色名稱皆為必填。</p></div><BlueprintTag>{members.length === 1 ? "SOLO" : "SQUAD"}</BlueprintTag></header>{members.map((member, memberIndex) => <div className="member-form" key={memberIndex}><span className="member-number">{String(memberIndex + 1).padStart(2, "0")}</span><label><span>角色名稱 <b>*</b></span><input value={member.name} onChange={event => onChange(memberIndex, "name", event.target.value)} required placeholder="角色名稱" maxLength={100} /></label><label><span>等級</span><input inputMode="numeric" value={member.level} onChange={event => onChange(memberIndex, "level", event.target.value)} placeholder="Lv." /></label><label><span>戰力</span><input inputMode="numeric" value={member.power} onChange={event => onChange(memberIndex, "power", event.target.value)} placeholder="選填" /></label><label><span>職業</span><input value={member.role} onChange={event => onChange(memberIndex, "role", event.target.value)} placeholder="選填" maxLength={40} /></label></div>)}</section>; }

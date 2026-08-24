@@ -1,11 +1,19 @@
-import { eq } from "drizzle-orm";
+import { and, desc, eq, gte, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
-import { ENV } from './_core/env';
+import { randomUUID } from "node:crypto";
+import {
+  type InsertUser,
+  pvpImportBatches,
+  pvpMatches,
+  type TeamMember,
+  users,
+} from "../drizzle/schema";
+import type { ImportedMatch, ParsedPvpImport } from "./pvpImport";
+import { buildDashboardStats } from "./pvpStats";
+import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
@@ -18,75 +26,150 @@ export async function getDb() {
   return _db;
 }
 
-export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) {
-    throw new Error("User openId is required for upsert");
-  }
-
+async function requireDb() {
   const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
-    return;
-  }
+  if (!db) throw new Error("資料庫目前無法使用，請稍後再試。");
+  return db;
+}
 
-  try {
-    const values: InsertUser = {
-      openId: user.openId,
-    };
-    const updateSet: Record<string, unknown> = {};
-
-    const textFields = ["name", "email", "loginMethod"] as const;
-    type TextField = (typeof textFields)[number];
-
-    const assignNullable = (field: TextField) => {
-      const value = user[field];
-      if (value === undefined) return;
-      const normalized = value ?? null;
-      values[field] = normalized;
-      updateSet[field] = normalized;
-    };
-
-    textFields.forEach(assignNullable);
-
-    if (user.lastSignedIn !== undefined) {
-      values.lastSignedIn = user.lastSignedIn;
-      updateSet.lastSignedIn = user.lastSignedIn;
+export async function upsertUser(user: InsertUser): Promise<void> {
+  if (!user.openId) throw new Error("User openId is required for upsert");
+  const db = await getDb();
+  if (!db) return;
+  const values: InsertUser = { openId: user.openId };
+  const updateSet: Record<string, unknown> = {};
+  (["name", "email", "loginMethod"] as const).forEach(field => {
+    if (user[field] !== undefined) {
+      values[field] = user[field] ?? null;
+      updateSet[field] = user[field] ?? null;
     }
-    if (user.role !== undefined) {
-      values.role = user.role;
-      updateSet.role = user.role;
-    } else if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
-    }
-
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
-    }
-
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = new Date();
-    }
-
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet,
-    });
-  } catch (error) {
-    console.error("[Database] Failed to upsert user:", error);
-    throw error;
-  }
+  });
+  values.lastSignedIn = user.lastSignedIn ?? new Date();
+  updateSet.lastSignedIn = values.lastSignedIn;
+  values.role = user.role ?? (user.openId === ENV.ownerOpenId ? "admin" : "user");
+  updateSet.role = values.role;
+  await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
 }
 
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot get user: database not available");
-    return undefined;
-  }
-
+  if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-
-  return result.length > 0 ? result[0] : undefined;
+  return result[0];
 }
 
-// TODO: add feature queries here as your schema grows.
+export type PvpFilters = {
+  mode?: "1v1" | "3v3";
+  outcome?: "win" | "loss" | "draw" | "unknown";
+  startAt?: number;
+  endAt?: number;
+};
+
+function ownedMatchConditions(userId: number, filters: PvpFilters = {}) {
+  const conditions = [eq(pvpMatches.userId, userId)];
+  if (filters.mode) conditions.push(eq(pvpMatches.mode, filters.mode));
+  if (filters.outcome) conditions.push(eq(pvpMatches.outcome, filters.outcome));
+  if (filters.startAt) conditions.push(gte(pvpMatches.battleAt, filters.startAt));
+  if (filters.endAt) conditions.push(lte(pvpMatches.battleAt, filters.endAt));
+  return and(...conditions);
+}
+
+export async function createPvpMatch(userId: number, values: {
+  battleAt: number;
+  mode: "1v1" | "3v3";
+  outcome: "win" | "loss" | "draw" | "unknown";
+  playerTeam: TeamMember[];
+  opponentTeam: TeamMember[];
+  opponentName?: string;
+  rankBefore?: number;
+  rankAfter?: number;
+  notes?: string;
+  source: "manual" | "import";
+}) {
+  const db = await requireDb();
+  const result = await db.insert(pvpMatches).values({ userId, ...values });
+  return { id: Number(result[0].insertId) };
+}
+
+export async function listPvpMatches(userId: number, filters: PvpFilters = {}) {
+  const db = await requireDb();
+  return db.select().from(pvpMatches).where(ownedMatchConditions(userId, filters)).orderBy(desc(pvpMatches.battleAt)).limit(250);
+}
+
+export async function getPvpMatch(userId: number, id: number) {
+  const db = await requireDb();
+  const result = await db.select().from(pvpMatches).where(and(eq(pvpMatches.id, id), eq(pvpMatches.userId, userId))).limit(1);
+  return result[0];
+}
+
+export async function deletePvpMatch(userId: number, id: number) {
+  const db = await requireDb();
+  const result = await db.delete(pvpMatches).where(and(eq(pvpMatches.id, id), eq(pvpMatches.userId, userId)));
+  return result[0].affectedRows > 0;
+}
+
+export async function getPvpDashboard(userId: number) {
+  const db = await requireDb();
+  const all = await db.select({
+    id: pvpMatches.id,
+    battleAt: pvpMatches.battleAt,
+    outcome: pvpMatches.outcome,
+    mode: pvpMatches.mode,
+    rankBefore: pvpMatches.rankBefore,
+    rankAfter: pvpMatches.rankAfter,
+    opponentName: pvpMatches.opponentName,
+  }).from(pvpMatches).where(eq(pvpMatches.userId, userId)).orderBy(desc(pvpMatches.battleAt));
+  return buildDashboardStats(all);
+}
+
+function importValues(record: ImportedMatch, userId: number, batchId: string) {
+  return {
+    userId,
+    importBatchId: batchId,
+    battleAt: record.battleAt,
+    mode: record.mode,
+    outcome: record.outcome,
+    playerTeam: record.playerTeam,
+    opponentTeam: record.opponentTeam,
+    opponentName: record.opponentName,
+    rankBefore: record.rankBefore,
+    rankAfter: record.rankAfter,
+    source: "import" as const,
+    rawPayload: record.rawPayload,
+    unrecognizedFields: record.unrecognizedFields,
+  };
+}
+
+export async function recordPvpImport(userId: number, label: string, parsed: ParsedPvpImport) {
+  const db = await requireDb();
+  const id = randomUUID();
+  const receivedAt = Date.now();
+  await db.transaction(async tx => {
+    await tx.insert(pvpImportBatches).values({
+      id,
+      userId,
+      label,
+      receivedAt,
+      recognizedCount: parsed.records.length,
+      rejectedCount: parsed.rejectedCount,
+      warnings: parsed.warnings,
+      rawPayload: parsed.rawPayload,
+    });
+    if (parsed.records.length) {
+      await tx.insert(pvpMatches).values(parsed.records.map(record => importValues(record, userId, id)));
+    }
+  });
+  return { id, receivedAt };
+}
+
+export async function listPvpImportBatches(userId: number) {
+  const db = await requireDb();
+  return db.select({
+    id: pvpImportBatches.id,
+    label: pvpImportBatches.label,
+    receivedAt: pvpImportBatches.receivedAt,
+    recognizedCount: pvpImportBatches.recognizedCount,
+    rejectedCount: pvpImportBatches.rejectedCount,
+    warnings: pvpImportBatches.warnings,
+  }).from(pvpImportBatches).where(eq(pvpImportBatches.userId, userId)).orderBy(desc(pvpImportBatches.receivedAt)).limit(20);
+}
