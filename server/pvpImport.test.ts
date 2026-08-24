@@ -128,4 +128,34 @@ describe("parsePvpImportPayload", () => {
     expect(parsed.records[0].playerTeam).toHaveLength(5);
     expect(parsed.records[0].opponentTeam).toHaveLength(5);
   });
+
+  it("保留官方結果頁 medals 證據與已確認的積分、排名變動", () => {
+    const parsed = parsePvpImportPayload(JSON.stringify({
+      format: "rf-pvp-analyzer/v1",
+      records: [{
+        battleAt: 1_725_000_400_000,
+        mode: "1v1",
+        outcome: "win",
+        playerTeam: ["我方"],
+        opponentTeam: ["對方"],
+        rankBefore: 980,
+        rankAfter: 904,
+        scoreBefore: 5945,
+        scoreAfter: 6135,
+        scoreChange: 190,
+        rankChange: 76,
+        resultEvidence: "official_player_medals",
+      }],
+    }));
+
+    expect(parsed.rejectedCount).toBe(0);
+    expect(parsed.records[0]).toMatchObject({ outcome: "win", rankBefore: 980, rankAfter: 904 });
+    expect(parsed.records[0].unrecognizedFields).toMatchObject({
+      scoreBefore: 5945,
+      scoreAfter: 6135,
+      scoreChange: 190,
+      rankChange: 76,
+      resultEvidence: "official_player_medals",
+    });
+  });
 });
