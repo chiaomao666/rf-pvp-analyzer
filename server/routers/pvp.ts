@@ -17,17 +17,13 @@ const matchInputSchema = z.object({
   battleAt: z.number().int().positive(),
   mode: z.enum(["1v1", "3v3"]),
   outcome: z.enum(["win", "loss", "draw", "unknown"]),
-  playerTeam: z.array(teamMemberSchema).min(1).max(3),
-  opponentTeam: z.array(teamMemberSchema).min(1).max(3),
+  // `mode` 是遊戲 PVP 模式；實際封包可為該模式下的完整多角色陣容，不以 1／3 人硬性截斷。
+  playerTeam: z.array(teamMemberSchema).min(1).max(20),
+  opponentTeam: z.array(teamMemberSchema).min(1).max(20),
   opponentName: z.string().trim().max(120).optional(),
   rankBefore: z.number().int().positive().optional(),
   rankAfter: z.number().int().positive().optional(),
   notes: z.string().trim().max(3000).optional(),
-}).superRefine((value, context) => {
-  const expected = value.mode === "1v1" ? 1 : 3;
-  if (value.playerTeam.length !== expected || value.opponentTeam.length !== expected) {
-    context.addIssue({ code: "custom", message: `${value.mode} 必須各有 ${expected} 名角色。` });
-  }
 });
 
 const filterSchema = z.object({

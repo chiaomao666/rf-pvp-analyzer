@@ -81,7 +81,7 @@ function normaliseTeam(value: unknown): TeamMember[] {
     const level = normaliseRank(firstValue(member, ["level", "lv"]));
     const powerValue = firstValue(member, ["power", "combatPower", "combat_power"]);
     const power = typeof powerValue === "number" && Number.isFinite(powerValue) ? Math.trunc(powerValue) : undefined;
-    const role = firstValue(member, ["role", "class"]);
+    const role = firstValue(member, ["role", "class", "abbr"]);
     const rarity = firstValue(member, ["rarity", "grade"]);
     return [{
       name: name.trim(),
@@ -89,7 +89,7 @@ function normaliseTeam(value: unknown): TeamMember[] {
       ...(power !== undefined ? { power } : {}),
       ...(typeof role === "string" ? { role } : {}),
       ...(typeof rarity === "string" ? { rarity } : {}),
-      raw: member,
+      raw: objectValue(member.raw) ?? member,
     }];
   });
 }
@@ -127,9 +127,9 @@ export function parsePvpImportPayload(dataText: string): ParsedPvpImport {
     const battleAt = normaliseTimestamp(firstValue(record, ["battleAt", "battle_at", "timestamp", "date", "playedAt", "played_at"]));
     const mode = normaliseMode(firstValue(record, ["mode", "battleMode", "battle_mode", "type"]), playerTeam.length);
 
-    if (!battleAt || !mode || playerTeam.length !== (mode === "1v1" ? 1 : 3) || opponentTeam.length !== (mode === "1v1" ? 1 : 3)) {
+    if (!battleAt || !mode || playerTeam.length < 1 || opponentTeam.length < 1 || playerTeam.length > 20 || opponentTeam.length > 20) {
       rejectedCount += 1;
-      if (warnings.length < 8) warnings.push("有一筆資料缺少可辨識的時間、模式或完整雙方隊伍，已保留在匯入原始檔中但未建立戰績。");
+      if (warnings.length < 8) warnings.push("有一筆資料缺少可辨識的時間、模式或非空雙方隊伍，或單方角色數超過安全上限，已保留在匯入原始檔中但未建立戰績。");
       continue;
     }
 

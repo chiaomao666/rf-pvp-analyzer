@@ -80,7 +80,7 @@ export default function Import() {
           </label>
           <div className="import-note">
             <AlertTriangle size={16} />
-            <p><b>辨識原則：</b>系統只在時間、模式與雙方完整隊伍可對應時建立戰績；其他資料不會被丟棄，而是原樣保留在這個匯入批次中。</p>
+            <p><b>辨識原則：</b>系統只在時間、模式與雙方非空隊伍可對應時建立戰績。`1v1`／`3v3` 會保留為遊戲模式，終局快照中的完整角色陣容不會被截斷；其他資料不會被丟棄，而是原樣保留在這個匯入批次中。</p>
           </div>
           <Button type="submit" className="blueprint-button primary-button" disabled={upload.isPending || !dataText.trim()}>
             {upload.isPending ? "驗證與保存中…" : <><ClipboardPaste size={16} />驗證並匯入</>}
@@ -92,7 +92,7 @@ export default function Import() {
           <h2>已支援的常見欄位</h2>
           <dl>
             <div><dt>時間</dt><dd>battleAt、timestamp、date</dd></div>
-            <div><dt>模式</dt><dd>mode、battleMode；或由隊伍人數推定</dd></div>
+            <div><dt>模式</dt><dd>mode、battleMode；或由 1／3 人資料推定</dd></div>
             <div><dt>隊伍</dt><dd>playerTeam / opponentTeam 與常見別名</dd></div>
             <div><dt>結果</dt><dd>outcome、result、winner、status</dd></div>
             <div><dt>排名</dt><dd>rankBefore / rankAfter 與常見別名</dd></div>

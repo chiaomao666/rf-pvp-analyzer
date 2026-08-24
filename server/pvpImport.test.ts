@@ -28,7 +28,7 @@ describe("parsePvpImportPayload", () => {
     });
   });
 
-  it("依三人隊伍推定 3v3，並拒絕隊伍不完整的紀錄而不拋棄整批資料", () => {
+  it("依三人隊伍推定 3v3，並拒絕缺少任一方隊伍的紀錄而不拋棄整批資料", () => {
     const parsed = parsePvpImportPayload(JSON.stringify([
       {
         date: "2026-08-24T12:00:00.000Z",
@@ -39,7 +39,7 @@ describe("parsePvpImportPayload", () => {
       {
         timestamp: 1_725_000_100,
         mode: "3v3",
-        playerTeam: ["A", "B"],
+        playerTeam: [],
         opponentTeam: ["D", "E", "F"],
       },
     ]));
@@ -47,7 +47,7 @@ describe("parsePvpImportPayload", () => {
     expect(parsed.records).toHaveLength(1);
     expect(parsed.records[0]).toMatchObject({ mode: "3v3", outcome: "loss" });
     expect(parsed.rejectedCount).toBe(1);
-    expect(parsed.warnings.join(" ")).toContain("完整雙方隊伍");
+    expect(parsed.warnings.join(" ")).toContain("非空雙方隊伍");
     expect(parsed.rawPayload).toHaveLength(2);
   });
 
@@ -88,5 +88,44 @@ describe("parsePvpImportPayload", () => {
       format: "rf-pvp-analyzer/v1",
       rawEvents: [{ event: "pvp_battle_status" }],
     });
+  });
+
+  it("接受真實 PVP 終局快照的五對五陣容，並將 1v1 保留為模式而非角色數量", () => {
+    const members = ["甲", "乙", "丙", "丁", "戊"].map((name, index) => ({
+      name,
+      level: 100 + index,
+      role: index % 2 ? "S" : "G",
+      raw: { defender: false, position: index + 1, blood: 1000 - index * 100 },
+    }));
+    const parsed = parsePvpImportPayload(JSON.stringify({
+      format: "rf-pvp-analyzer/v1",
+      records: [{
+        battleAt: 1_725_000_300_000,
+        mode: "1v1",
+        outcome: "unknown",
+        playerTeam: members,
+        opponentTeam: members.map(member => ({ ...member, name: `敵${member.name}`, raw: { ...member.raw, defender: true } })),
+        opponentName: "真實對手",
+        sourceBattleChannel: "pvp_battle:example",
+        terminalAction: "medals",
+        rawEvent: { terminal: { next_action: "medals" } },
+      }],
+    }));
+
+    expect(parsed.rejectedCount).toBe(0);
+    expect(parsed.records).toHaveLength(1);
+    expect(parsed.records[0]).toMatchObject({
+      mode: "1v1",
+      outcome: "unknown",
+      opponentName: "真實對手",
+      unrecognizedFields: {
+        sourceBattleChannel: "pvp_battle:example",
+        terminalAction: "medals",
+      },
+    });
+    expect(parsed.records[0].playerTeam[0]).toMatchObject({ name: "甲", level: 100, role: "G" });
+    expect(parsed.records[0].playerTeam[0].raw).toEqual({ defender: false, position: 1, blood: 1000 });
+    expect(parsed.records[0].playerTeam).toHaveLength(5);
+    expect(parsed.records[0].opponentTeam).toHaveLength(5);
   });
 });

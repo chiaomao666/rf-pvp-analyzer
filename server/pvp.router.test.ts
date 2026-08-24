@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 const dbMocks = vi.hoisted(() => ({
+  createPvpMatch: vi.fn(),
   getPvpMatch: vi.fn(),
   listPvpMatches: vi.fn(),
 }));
@@ -46,5 +47,31 @@ describe("pvp.list", () => {
 
     await expect(caller.pvp.list(filters)).resolves.toEqual([]);
     expect(dbMocks.listPvpMatches).toHaveBeenCalledWith(12, filters);
+  });
+});
+
+describe("pvp.create", () => {
+  it("保留 1v1 模式下的完整五人終局陣容，而不以模式名稱截斷角色快照", async () => {
+    dbMocks.createPvpMatch.mockResolvedValue({ id: 88, userId: 12 });
+    const caller = appRouter.createCaller(authenticatedContext(12));
+    const playerTeam = Array.from({ length: 5 }, (_, index) => ({ name: `己方${index + 1}`, level: 100 + index }));
+    const opponentTeam = Array.from({ length: 5 }, (_, index) => ({ name: `對方${index + 1}`, level: 100 + index }));
+
+    await expect(caller.pvp.create({
+      battleAt: 1_725_000_300_000,
+      mode: "1v1",
+      outcome: "unknown",
+      playerTeam,
+      opponentTeam,
+      opponentName: "測試對手",
+    })).resolves.toMatchObject({ id: 88 });
+
+    expect(dbMocks.createPvpMatch).toHaveBeenCalledWith(12, expect.objectContaining({
+      mode: "1v1",
+      outcome: "unknown",
+      playerTeam,
+      opponentTeam,
+      source: "manual",
+    }));
   });
 });
