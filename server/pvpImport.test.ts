@@ -50,4 +50,43 @@ describe("parsePvpImportPayload", () => {
     expect(parsed.warnings.join(" ")).toContain("完整雙方隊伍");
     expect(parsed.rawPayload).toHaveLength(2);
   });
+
+  it("接受 PVP 守衛的分析站匯出包裝格式，並保留守衛的原始封包欄位", () => {
+    const guardExport = {
+      format: "rf-pvp-analyzer/v1",
+      exportedAt: "2026-08-24T16:00:00.000Z",
+      source: "PVP Double Match Guard",
+      records: [{
+        battleAt: 1_725_000_200_000,
+        mode: "3v3",
+        outcome: "unknown",
+        playerTeam: ["A", "B", "C"],
+        opponentTeam: ["D", "E", "F"],
+        rankBefore: 90,
+        rankAfter: 86,
+        sourceEvent: "pvp_battle_status",
+        rawEvent: { status: "matched", channel: "battle:123" },
+      }],
+      rawEvents: [{ event: "pvp_battle_status", payload: { status: "matched" } }],
+    };
+
+    const parsed = parsePvpImportPayload(JSON.stringify(guardExport));
+
+    expect(parsed.rejectedCount).toBe(0);
+    expect(parsed.records).toHaveLength(1);
+    expect(parsed.records[0]).toMatchObject({
+      mode: "3v3",
+      outcome: "unknown",
+      rankBefore: 90,
+      rankAfter: 86,
+      unrecognizedFields: {
+        sourceEvent: "pvp_battle_status",
+        rawEvent: { status: "matched", channel: "battle:123" },
+      },
+    });
+    expect(parsed.rawPayload).toMatchObject({
+      format: "rf-pvp-analyzer/v1",
+      rawEvents: [{ event: "pvp_battle_status" }],
+    });
+  });
 });
