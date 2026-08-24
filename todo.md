@@ -40,3 +40,6 @@
 - [x] 直接測試 `recordPvpImport`：既有待確認紀錄接收同場官方結果後，回傳 createdCount 0／updatedCount 1，且交易不執行新增。
 - [x] 直接測試 `recordPvpImport`：重複匯入相同官方結果後，回傳 createdCount 0／updatedCount 0。
 - [x] 直接測試 `recordPvpImport`：相同來源鍵的其他使用者紀錄不會被當前使用者的匯入更新。
+- [x] 診斷 PVP 守衛在長時間閒置、官方 WebSocket 重建或守衛晚掛載後未再記錄封包的連線生命週期。
+- [x] 以完全被動方式支援既有與後續建立的 WebSocket 連線，避免重連後遺漏 PVP 封包且不改寫、延遲或阻擋官方訊框。
+- [x] 建立閒置後重連／晚掛載的載入器與守衛回歸模擬，驗證新戰鬥仍能被匯出為紀錄。
