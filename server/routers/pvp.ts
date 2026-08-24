@@ -3,7 +3,7 @@ import { z } from "zod";
 import { pvpMatches, type TeamMember } from "../../drizzle/schema";
 import * as db from "../db";
 import { parsePvpImportPayload } from "../pvpImport";
-import { protectedProcedure, router } from "../_core/trpc";
+import { pvpOwnerProcedure, router } from "../_core/trpc";
 
 /** 完整守衛匯出含 rawEvents；25MB 足以保存長對戰歷程，仍保留單次請求邊界。 */
 const MAX_PVP_IMPORT_TEXT_LENGTH = 25_000_000;
@@ -37,15 +37,15 @@ const filterSchema = z.object({
 });
 
 export const pvpRouter = router({
-  dashboard: protectedProcedure.query(({ ctx }) => db.getPvpDashboard(ctx.user.id)),
-  list: protectedProcedure.input(filterSchema).query(({ ctx, input }) => db.listPvpMatches(ctx.user.id, input)),
-  get: protectedProcedure.input(z.object({ id: z.number().int().positive() })).query(async ({ ctx, input }) => {
-    const match = await db.getPvpMatch(ctx.user.id, input.id);
+  dashboard: pvpOwnerProcedure.query(({ ctx }) => db.getPvpDashboard(ctx.pvpOwner.id)),
+  list: pvpOwnerProcedure.input(filterSchema).query(({ ctx, input }) => db.listPvpMatches(ctx.pvpOwner.id, input)),
+  get: pvpOwnerProcedure.input(z.object({ id: z.number().int().positive() })).query(async ({ ctx, input }) => {
+    const match = await db.getPvpMatch(ctx.pvpOwner.id, input.id);
     if (!match) throw new TRPCError({ code: "NOT_FOUND", message: "找不到這筆戰績。" });
     return match;
   }),
-  create: protectedProcedure.input(matchInputSchema).mutation(async ({ ctx, input }) => {
-    const match = await db.createPvpMatch(ctx.user.id, {
+  create: pvpOwnerProcedure.input(matchInputSchema).mutation(async ({ ctx, input }) => {
+    const match = await db.createPvpMatch(ctx.pvpOwner.id, {
       ...input,
       playerTeam: input.playerTeam as TeamMember[],
       opponentTeam: input.opponentTeam as TeamMember[],
@@ -53,19 +53,19 @@ export const pvpRouter = router({
     });
     return match;
   }),
-  delete: protectedProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
-    const removed = await db.deletePvpMatch(ctx.user.id, input.id);
+  delete: pvpOwnerProcedure.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+    const removed = await db.deletePvpMatch(ctx.pvpOwner.id, input.id);
     if (!removed) throw new TRPCError({ code: "NOT_FOUND", message: "找不到這筆戰績。" });
     return { success: true } as const;
   }),
-  importJson: protectedProcedure.input(z.object({
+  importJson: pvpOwnerProcedure.input(z.object({
     label: z.string().trim().min(1).max(120),
     dataText: z.string().min(2).max(MAX_PVP_IMPORT_TEXT_LENGTH),
   })).mutation(async ({ ctx, input }) => {
     const parsed = parsePvpImportPayload(input.dataText);
     let batch: Awaited<ReturnType<typeof db.recordPvpImport>>;
     try {
-      batch = await db.recordPvpImport(ctx.user.id, input.label, parsed);
+      batch = await db.recordPvpImport(ctx.pvpOwner.id, input.label, parsed);
     } catch {
       // 不將 ORM/SQL 例外（可能含完整原始 JSON）透傳至瀏覽器。
       throw new TRPCError({
@@ -82,5 +82,5 @@ export const pvpRouter = router({
       warnings: parsed.warnings,
     };
   }),
-  listImports: protectedProcedure.query(({ ctx }) => db.listPvpImportBatches(ctx.user.id)),
+  listImports: pvpOwnerProcedure.query(({ ctx }) => db.listPvpImportBatches(ctx.pvpOwner.id)),
 });

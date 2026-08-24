@@ -1,7 +1,8 @@
 import { EmptyData, ModeBadge, OutcomeBadge, RankDelta, TeamStrip, type TeamMember } from "@/components/PvpUi";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { formatLocalDateTime } from "@/lib/localTime";
-import { handlePvpMatchDeleteClick, refreshAfterPvpMatchDelete } from "@/lib/pvpMatchDeletion";
+import { preventPvpMatchDeleteNavigation, refreshAfterPvpMatchDelete } from "@/lib/pvpMatchDeletion";
 import { trpc } from "@/lib/trpc";
 import { Filter, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -18,6 +19,7 @@ export default function Matches() {
   const [outcome, setOutcome] = useState<"" | "win" | "loss" | "draw" | "unknown">("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<{ id: number; battleAt: number } | null>(null);
   const filters = useMemo(() => ({ ...(mode ? { mode } : {}), ...(outcome ? { outcome } : {}), ...(toStartTimestamp(startDate) ? { startAt: toStartTimestamp(startDate) } : {}), ...(toEndTimestamp(endDate) ? { endAt: toEndTimestamp(endDate) } : {}) }), [mode, outcome, startDate, endDate]);
   const matches = trpc.pvp.list.useQuery(filters);
   const utils = trpc.useUtils();
@@ -28,12 +30,13 @@ export default function Matches() {
         invalidateDashboard: () => utils.pvp.dashboard.invalidate(),
         notifySuccess: () => toast.success("已刪除這筆戰績。"),
       });
+      setPendingDelete(null);
     },
     onError: error => toast.error(error.message),
   });
 
   return <div className="page-enter">
-    <section className="page-titlebar compact-titlebar"><div><p className="eyebrow">ARCHIVE / FILTERABLE BATTLE LEDGER</p><h1>戰績歷史<span className="title-underscore">_</span></h1><p>所有篩選僅讀取登入使用者自己的資料。</p></div><Link href="/record"><Button className="blueprint-button primary-button"><Plus size={16} />新增對戰</Button></Link></section>
+    <section className="page-titlebar compact-titlebar"><div><p className="eyebrow">ARCHIVE / FILTERABLE BATTLE LEDGER</p><h1>戰績歷史<span className="title-underscore">_</span></h1><p>所有篩選僅讀取此瀏覽器裝置的私有資料。</p></div><Link href="/record"><Button className="blueprint-button primary-button"><Plus size={16} />新增對戰</Button></Link></section>
     <section className="filter-panel technical-frame">
       <div className="filter-label"><Filter size={15} />篩選條件</div>
       <label><span>模式</span><select value={mode} onChange={event => setMode(event.target.value as typeof mode)}><option value="">全部模式</option><option value="1v1">1v1</option><option value="3v3">3v3</option></select></label>
@@ -42,6 +45,18 @@ export default function Matches() {
       <label><span>結束日期</span><input type="date" value={endDate} onChange={event => setEndDate(event.target.value)} /></label>
       <button className="reset-filter" type="button" onClick={() => { setMode(""); setOutcome(""); setStartDate(""); setEndDate(""); }}>清除</button>
     </section>
-    {matches.isLoading ? <div className="loading-block">讀取戰績資料…</div> : !matches.data?.length ? <EmptyData title="找不到符合條件的戰績" description="調整日期、模式或結果篩選，或新增一筆排名戰紀錄。" action={<Link href="/record"><Button className="blueprint-button primary-button"><Plus size={16} />新增對戰</Button></Link>} /> : <section className="history-table technical-frame"><div className="history-head"><span>日期／模式</span><span>結果</span><span>我的隊伍</span><span>對手隊伍</span><span>排名變動</span><span>操作</span></div>{matches.data.map(match => <article key={match.id} className="history-row"><Link href={`/matches/${match.id}`} className="history-row-link"><div><time>{formatLocalDateTime(match.battleAt)}</time><ModeBadge mode={match.mode} /></div><OutcomeBadge outcome={match.outcome} /><TeamStrip members={match.playerTeam as TeamMember[]} /><TeamStrip members={match.opponentTeam as TeamMember[]} tone="opponent" /><RankDelta before={match.rankBefore} after={match.rankAfter} /></Link><Button type="button" variant="outline" size="icon" className="history-delete" disabled={deleteMatch.isPending} onClick={event => handlePvpMatchDeleteClick(event, match.id, () => window.confirm("確定要刪除這筆戰績嗎？此操作無法復原。"), input => deleteMatch.mutate(input))} aria-label={`刪除 ${formatLocalDateTime(match.battleAt)} 的戰績`}><Trash2 size={16} /></Button></article>)}</section>}
+    {matches.isLoading ? <div className="loading-block">讀取戰績資料…</div> : !matches.data?.length ? <EmptyData title="找不到符合條件的戰績" description="調整日期、模式或結果篩選，或新增一筆排名戰紀錄。" action={<Link href="/record"><Button className="blueprint-button primary-button"><Plus size={16} />新增對戰</Button></Link>} /> : <section className="history-table technical-frame"><div className="history-head"><span>日期／模式</span><span>結果</span><span>我的隊伍</span><span>對手隊伍</span><span>排名變動</span><span>操作</span></div>{matches.data.map(match => <article key={match.id} className="history-row"><Link href={`/matches/${match.id}`} className="history-row-link"><div><time>{formatLocalDateTime(match.battleAt)}</time><ModeBadge mode={match.mode} /></div><OutcomeBadge outcome={match.outcome} /><TeamStrip members={match.playerTeam as TeamMember[]} /><TeamStrip members={match.opponentTeam as TeamMember[]} tone="opponent" /><RankDelta before={match.rankBefore} after={match.rankAfter} /></Link><Button type="button" variant="outline" size="icon" className="history-delete" disabled={deleteMatch.isPending} onClick={event => { preventPvpMatchDeleteNavigation(event); setPendingDelete({ id: match.id, battleAt: match.battleAt }); }} aria-label={`刪除 ${formatLocalDateTime(match.battleAt)} 的戰績`}><Trash2 size={16} /></Button></article>)}</section>}
+    <AlertDialog open={pendingDelete !== null} onOpenChange={open => { if (!open && !deleteMatch.isPending) setPendingDelete(null); }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>刪除這筆戰績？</AlertDialogTitle>
+          <AlertDialogDescription>將永久刪除 {pendingDelete ? formatLocalDateTime(pendingDelete.battleAt) : "這筆"} 的戰績，無法復原。</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={deleteMatch.isPending}>取消</AlertDialogCancel>
+          <AlertDialogAction disabled={!pendingDelete || deleteMatch.isPending} onClick={event => { event.preventDefault(); if (pendingDelete) deleteMatch.mutate({ id: pendingDelete.id }); }}>{deleteMatch.isPending ? "刪除中…" : "確認刪除"}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </div>;
 }

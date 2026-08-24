@@ -1,7 +1,4 @@
-import { useAuth } from "@/_core/hooks/useAuth";
-import { startLogin } from "@/const";
-import { Button } from "@/components/ui/button";
-import { ChevronDown, Database, LayoutDashboard, LogOut, PlusSquare, Shield, Upload } from "lucide-react";
+import { ChevronDown, Database, LayoutDashboard, PlusSquare, Shield, Upload } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 const navigation = [
@@ -12,28 +9,7 @@ const navigation = [
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { loading, user, logout } = useAuth();
   const [location] = useLocation();
-
-  if (loading) {
-    return <div className="app-loading"><div className="loading-grid" /><p>正在建立安全工作階段…</p></div>;
-  }
-
-  if (!user) {
-    return (
-      <div className="auth-shell">
-        <div className="auth-grid" />
-        <section className="auth-card technical-frame">
-          <span className="auth-mark"><Shield size={24} /></span>
-          <p className="eyebrow">RF / PVP INTELLIGENCE SYSTEM</p>
-          <h1>每一場排名戰，
-            <br />都留下可回查的資料軌跡。</h1>
-          <p className="auth-copy">登入後才能建立及查看你的私有戰績資料。每個查詢與匯入操作皆以登入身分為資料邊界。</p>
-          <Button onClick={() => startLogin()} className="blueprint-button primary-button">以 Manus 帳號安全登入</Button>
-        </section>
-      </div>
-    );
-  }
 
   return (
     <div className="app-shell">
@@ -51,13 +27,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
         <div className="account-zone">
           <span className="presence-dot" />
-          <div className="account-copy"><b>{user.name || "已登入使用者"}</b><small>PRIVATE VAULT</small></div>
-          <button className="logout-button" onClick={logout} title="登出"><LogOut size={16} /></button>
+          <div className="account-copy"><b>本機私有資料</b><small>THIS BROWSER ONLY</small></div>
           <ChevronDown size={14} className="account-chevron" />
         </div>
       </header>
       <main className="workspace">{children}</main>
-      <footer className="app-footer"><span>RF PVP ANALYZER</span><i /> <span>USER-SCOPED DATABASE</span><i /> <span>UTC TIMESTAMPS · LOCAL DISPLAY</span></footer>
+      <footer className="app-footer"><span>RF PVP ANALYZER</span><i /> <span>DEVICE-SCOPED DATABASE</span><i /> <span>UTC TIMESTAMPS · LOCAL DISPLAY</span></footer>
     </div>
   );
 }

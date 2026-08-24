@@ -1,7 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
-import { handlePvpMatchDeleteClick, refreshAfterPvpMatchDelete } from "./pvpMatchDeletion";
+import { handlePvpMatchDeleteClick, preventPvpMatchDeleteNavigation, refreshAfterPvpMatchDelete } from "./pvpMatchDeletion";
 
 describe("PVP 歷史列表直接刪除", () => {
+  it("開啟頁內確認對話前會阻止列項導覽事件", () => {
+    const event = { preventDefault: vi.fn(), stopPropagation: vi.fn() };
+
+    preventPvpMatchDeleteNavigation(event);
+
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    expect(event.stopPropagation).toHaveBeenCalledOnce();
+  });
+
   it("垃圾桶點擊會阻止導覽事件，確認後才呼叫刪除 mutation", () => {
     const event = { preventDefault: vi.fn(), stopPropagation: vi.fn() };
     const mutate = vi.fn();

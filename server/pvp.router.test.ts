@@ -1,14 +1,19 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const dbMocks = vi.hoisted(() => ({
   createPvpMatch: vi.fn(),
   deletePvpMatch: vi.fn(),
+  getOrCreateAnonymousDeviceUser: vi.fn(),
   getPvpMatch: vi.fn(),
   listPvpMatches: vi.fn(),
   recordPvpImport: vi.fn(),
 }));
 
 vi.mock("./db", () => dbMocks);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
@@ -31,6 +36,14 @@ function authenticatedContext(userId: number): TrpcContext {
   };
 }
 
+function anonymousContext(deviceId = "9d2fa6dd-8c0e-4cba-9ec7-2d7c3f1a0f11"): TrpcContext {
+  return {
+    user: null,
+    req: { protocol: "https", headers: { "x-rf-pvp-device": deviceId } } as TrpcContext["req"],
+    res: {} as TrpcContext["res"],
+  };
+}
+
 describe("pvp.get", () => {
   it("將登入使用者 ID 傳入資料查詢，避免以他人帳號範圍讀取資料", async () => {
     dbMocks.getPvpMatch.mockResolvedValue({ id: 77, userId: 12 });
@@ -49,6 +62,27 @@ describe("pvp.list", () => {
 
     await expect(caller.pvp.list(filters)).resolves.toEqual([]);
     expect(dbMocks.listPvpMatches).toHaveBeenCalledWith(12, filters);
+  });
+
+  it("免登入時以匿名裝置所有者範圍查詢，且不會沿用其他帳戶 ID", async () => {
+    dbMocks.getOrCreateAnonymousDeviceUser.mockResolvedValue({ id: 903, openId: "anon:device", role: "user" });
+    dbMocks.listPvpMatches.mockResolvedValue([]);
+    const caller = appRouter.createCaller(anonymousContext());
+
+    await expect(caller.pvp.list({})).resolves.toEqual([]);
+    expect(dbMocks.getOrCreateAnonymousDeviceUser).toHaveBeenCalledWith("9d2fa6dd-8c0e-4cba-9ec7-2d7c3f1a0f11");
+    expect(dbMocks.listPvpMatches).toHaveBeenLastCalledWith(903, {});
+  });
+
+  it("已有 Manus 工作階段時優先使用原帳戶範圍，不會改由匿名裝置取得資料", async () => {
+    dbMocks.listPvpMatches.mockResolvedValue([]);
+    const context = authenticatedContext(12);
+    (context.req.headers as Record<string, string>)["x-rf-pvp-device"] = "9d2fa6dd-8c0e-4cba-9ec7-2d7c3f1a0f11";
+    const caller = appRouter.createCaller(context);
+
+    await expect(caller.pvp.list({})).resolves.toEqual([]);
+    expect(dbMocks.getOrCreateAnonymousDeviceUser).not.toHaveBeenCalled();
+    expect(dbMocks.listPvpMatches).toHaveBeenLastCalledWith(12, {});
   });
 });
 
@@ -75,6 +109,22 @@ describe("pvp.create", () => {
       opponentTeam,
       source: "manual",
     }));
+  });
+
+  it("未登入時以匿名裝置所有者建立戰績", async () => {
+    dbMocks.getOrCreateAnonymousDeviceUser.mockResolvedValue({ id: 903, openId: "anon:device-a", role: "user" });
+    dbMocks.createPvpMatch.mockResolvedValue({ id: 89, userId: 903 });
+    const caller = appRouter.createCaller(anonymousContext());
+
+    await expect(caller.pvp.create({
+      battleAt: 1_725_000_300_000,
+      mode: "1v1",
+      outcome: "unknown",
+      playerTeam: [{ name: "匿名己方", level: 100 }],
+      opponentTeam: [{ name: "匿名對方", level: 100 }],
+    })).resolves.toMatchObject({ id: 89 });
+
+    expect(dbMocks.createPvpMatch).toHaveBeenCalledWith(903, expect.objectContaining({ source: "manual" }));
   });
 });
 
@@ -156,6 +206,19 @@ describe("pvp.importJson", () => {
       dataText: JSON.stringify({ records: [validRecord] }),
     })).rejects.toThrow("匯入批次暫時無法保存");
   });
+
+  it("未登入時以匿名裝置所有者保存匯入批次與戰績", async () => {
+    dbMocks.getOrCreateAnonymousDeviceUser.mockResolvedValue({ id: 903, openId: "anon:device-a", role: "user" });
+    dbMocks.recordPvpImport.mockResolvedValue({ id: "anon-import", createdCount: 1, updatedCount: 0 });
+    const caller = appRouter.createCaller(anonymousContext());
+
+    await expect(caller.pvp.importJson({
+      label: "匿名守衛匯出",
+      dataText: JSON.stringify({ records: [validRecord], rawEvents: [] }),
+    })).resolves.toMatchObject({ batchId: "anon-import", importedCount: 1 });
+
+    expect(dbMocks.recordPvpImport).toHaveBeenCalledWith(903, "匿名守衛匯出", expect.objectContaining({ records: [expect.any(Object)] }));
+  });
 });
 
 describe("pvp.delete", () => {
@@ -167,5 +230,36 @@ describe("pvp.delete", () => {
     expect(dbMocks.deletePvpMatch).toHaveBeenCalledWith(12, 91);
     await expect(caller.pvp.delete({ id: 92 })).rejects.toThrow();
     expect(dbMocks.deletePvpMatch).toHaveBeenLastCalledWith(12, 92);
+  });
+
+  it("未登入時以匿名裝置所有者刪除自己的戰績", async () => {
+    dbMocks.getOrCreateAnonymousDeviceUser.mockResolvedValue({ id: 903, openId: "anon:device-a", role: "user" });
+    dbMocks.deletePvpMatch.mockResolvedValue(true);
+    const caller = appRouter.createCaller(anonymousContext());
+
+    await expect(caller.pvp.delete({ id: 91 })).resolves.toEqual({ success: true });
+    expect(dbMocks.deletePvpMatch).toHaveBeenCalledWith(903, 91);
+  });
+
+  it("device B 無法讀取或刪除 device A 的戰績", async () => {
+    const deviceA = "9d2fa6dd-8c0e-4cba-9ec7-2d7c3f1a0f11";
+    const deviceBId = "3f6ecf52-95f2-4e8d-a8e2-8b5d95a58f6c";
+    dbMocks.getOrCreateAnonymousDeviceUser.mockImplementation(async (deviceId: string) => ({
+      id: deviceId === deviceA ? 903 : 904,
+      openId: `anon:${deviceId}`,
+      role: "user",
+    }));
+    dbMocks.listPvpMatches.mockResolvedValue([]);
+    dbMocks.getPvpMatch.mockResolvedValue(undefined);
+    dbMocks.deletePvpMatch.mockResolvedValue(false);
+    const deviceB = appRouter.createCaller(anonymousContext(deviceBId));
+
+    await expect(deviceB.pvp.list({})).resolves.toEqual([]);
+    await expect(deviceB.pvp.get({ id: 321 })).rejects.toThrow();
+    await expect(deviceB.pvp.delete({ id: 321 })).rejects.toThrow();
+
+    expect(dbMocks.listPvpMatches).toHaveBeenLastCalledWith(904, {});
+    expect(dbMocks.getPvpMatch).toHaveBeenLastCalledWith(904, 321);
+    expect(dbMocks.deletePvpMatch).toHaveBeenLastCalledWith(904, 321);
   });
 });

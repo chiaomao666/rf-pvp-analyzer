@@ -59,6 +59,24 @@ export async function getUserByOpenId(openId: string) {
   return result[0];
 }
 
+export async function getOrCreateAnonymousDeviceUser(deviceId: string) {
+  const db = await requireDb();
+  const openId = `anon:${deviceId}`;
+  const now = new Date();
+
+  await db.insert(users).values({
+    openId,
+    name: "匿名裝置",
+    loginMethod: "anonymous-device",
+    role: "user",
+    lastSignedIn: now,
+  }).onDuplicateKeyUpdate({ set: { lastSignedIn: now } });
+
+  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  if (!result[0]) throw new Error("無法建立匿名裝置資料範圍。");
+  return result[0];
+}
+
 export type PvpFilters = {
   mode?: "1v1" | "3v3";
   outcome?: "win" | "loss" | "draw" | "unknown";
