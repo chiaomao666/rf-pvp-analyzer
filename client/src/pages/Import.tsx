@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { formatLocalDateTime } from "@/lib/localTime";
 import { uploadPvpImportChunks, type PvpImportUploadSummary } from "@/lib/pvpImportUpload";
 import { trpc } from "@/lib/trpc";
-import { AlertTriangle, ClipboardPaste, Database, FileJson, Upload } from "lucide-react";
+import { AlertTriangle, ClipboardPaste, Database, Download, FileJson, Upload } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -16,8 +16,28 @@ export default function Import() {
   const [result, setResult] = useState<PvpImportUploadSummary | null>(null);
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
   const imports = trpc.pvp.listImports.useQuery();
+  const backup = trpc.pvp.exportBackup.useQuery(undefined, { enabled: false });
 
   const upload = trpc.pvp.importJson.useMutation();
+
+  const downloadBackup = async () => {
+    try {
+      const response = await backup.refetch();
+      if (!response.data) throw new Error("目前無法建立備份，請稍後重試。");
+      const content = JSON.stringify(response.data, null, 2);
+      const href = URL.createObjectURL(new Blob([content], { type: "application/json" }));
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = `rf-pvp-backup-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(href);
+      toast.success(`已下載 ${response.data.recordCount} 筆戰績備份；請保存在安全位置。`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "建立備份失敗，請稍後重試。");
+    }
+  };
 
   const readFile = (file?: File) => {
     if (!file) return;
@@ -67,6 +87,9 @@ export default function Import() {
           <h1>匯入資料<span className="title-underscore">_</span></h1>
           <p>可貼上或上傳 PVP 守衛腳本匯出的 JSON；已建立或回填的戰績會保留其來源資料，匯入批次則保存可追溯摘要。</p>
         </div>
+        <Button type="button" variant="outline" className="blueprint-button" onClick={downloadBackup} disabled={backup.isFetching}>
+          <Download size={16} />{backup.isFetching ? "正在建立備份…" : "下載完整資料備份"}
+        </Button>
       </section>
 
       <section className="import-grid">

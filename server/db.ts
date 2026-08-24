@@ -115,6 +115,28 @@ export async function listPvpMatches(userId: number, filters: PvpFilters = {}) {
   return db.select().from(pvpMatches).where(ownedMatchConditions(userId, filters)).orderBy(desc(pvpMatches.battleAt)).limit(250);
 }
 
+/**
+ * 回傳可攜備份所需的完整戰績欄位，刻意排除 userId、資料庫主鍵與匯入批次關聯，
+ * 讓備份可安全匯入其他本機資料庫而不攜帶所有者識別資訊。
+ */
+export async function exportPvpMatches(userId: number) {
+  const db = await requireDb();
+  return db.select({
+    battleAt: pvpMatches.battleAt,
+    mode: pvpMatches.mode,
+    outcome: pvpMatches.outcome,
+    playerTeam: pvpMatches.playerTeam,
+    opponentTeam: pvpMatches.opponentTeam,
+    opponentName: pvpMatches.opponentName,
+    rankBefore: pvpMatches.rankBefore,
+    rankAfter: pvpMatches.rankAfter,
+    notes: pvpMatches.notes,
+    source: pvpMatches.source,
+    rawPayload: pvpMatches.rawPayload,
+    unrecognizedFields: pvpMatches.unrecognizedFields,
+  }).from(pvpMatches).where(eq(pvpMatches.userId, userId)).orderBy(desc(pvpMatches.battleAt));
+}
+
 export async function getPvpMatch(userId: number, id: number) {
   const db = await requireDb();
   const result = await db.select().from(pvpMatches).where(and(eq(pvpMatches.id, id), eq(pvpMatches.userId, userId))).limit(1);

@@ -39,6 +39,15 @@ const filterSchema = z.object({
 export const pvpRouter = router({
   dashboard: pvpOwnerProcedure.query(({ ctx }) => db.getPvpDashboard(ctx.pvpOwner.id)),
   list: pvpOwnerProcedure.input(filterSchema).query(({ ctx, input }) => db.listPvpMatches(ctx.pvpOwner.id, input)),
+  exportBackup: pvpOwnerProcedure.query(async ({ ctx }) => {
+    const records = await db.exportPvpMatches(ctx.pvpOwner.id);
+    return {
+      format: "rf-pvp-analyzer/local-backup-v1" as const,
+      exportedAt: new Date().toISOString(),
+      recordCount: records.length,
+      records,
+    };
+  }),
   get: pvpOwnerProcedure.input(z.object({ id: z.number().int().positive() })).query(async ({ ctx, input }) => {
     const match = await db.getPvpMatch(ctx.pvpOwner.id, input.id);
     if (!match) throw new TRPCError({ code: "NOT_FOUND", message: "找不到這筆戰績。" });

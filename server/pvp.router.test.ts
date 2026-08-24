@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const dbMocks = vi.hoisted(() => ({
   createPvpMatch: vi.fn(),
   deletePvpMatch: vi.fn(),
+  exportPvpMatches: vi.fn(),
   getOrCreateAnonymousDeviceUser: vi.fn(),
   getPvpMatch: vi.fn(),
   listPvpMatches: vi.fn(),
@@ -83,6 +84,23 @@ describe("pvp.list", () => {
     await expect(caller.pvp.list({})).resolves.toEqual([]);
     expect(dbMocks.getOrCreateAnonymousDeviceUser).not.toHaveBeenCalled();
     expect(dbMocks.listPvpMatches).toHaveBeenLastCalledWith(12, {});
+  });
+});
+
+describe("pvp.exportBackup", () => {
+  it("只匯出目前匿名裝置所有者的完整戰績，不會讀取其他裝置資料", async () => {
+    const deviceId = "9d2fa6dd-8c0e-4cba-9ec7-2d7c3f1a0f11";
+    const records = [{ battleAt: 1_725_000_300_000, mode: "1v1", outcome: "win" }];
+    dbMocks.getOrCreateAnonymousDeviceUser.mockResolvedValue({ id: 903, openId: `anon:${deviceId}`, role: "user" });
+    dbMocks.exportPvpMatches.mockResolvedValue(records);
+    const caller = appRouter.createCaller(anonymousContext(deviceId));
+
+    await expect(caller.pvp.exportBackup()).resolves.toMatchObject({
+      format: "rf-pvp-analyzer/local-backup-v1",
+      recordCount: 1,
+      records,
+    });
+    expect(dbMocks.exportPvpMatches).toHaveBeenCalledWith(903);
   });
 });
 
