@@ -1,13 +1,10 @@
 import { EmptyData, MetricCard, ModeBadge, OutcomeBadge, RankDelta } from "@/components/PvpUi";
 import { Button } from "@/components/ui/button";
+import { formatLocalDateTime, formatLocalShortDate, formatLocalShortDateTime } from "@/lib/localTime";
 import { trpc } from "@/lib/trpc";
 import { ArrowUpRight, ChartNoAxesCombined, Clock3, Plus, TrendingUp, Upload } from "lucide-react";
 import { Link } from "wouter";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-
-function formatDate(timestamp: number) {
-  return new Date(timestamp).toLocaleString("zh-TW", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
-}
 
 export default function Home() {
   const dashboard = trpc.pvp.dashboard.useQuery();
@@ -45,9 +42,9 @@ export default function Home() {
                 <ResponsiveContainer width="100%" height={250}>
                   <LineChart data={data.rankSeries} margin={{ top: 18, right: 18, left: -12, bottom: 8 }}>
                     <CartesianGrid stroke="rgba(143, 220, 255, .13)" vertical={false} />
-                    <XAxis dataKey="battleAt" tickFormatter={value => new Date(value).toLocaleDateString("zh-TW", { month: "numeric", day: "numeric" })} stroke="#7fa2cc" tickLine={false} axisLine={false} fontSize={11} />
+                    <XAxis dataKey="battleAt" tickFormatter={value => formatLocalShortDate(Number(value))} stroke="#7fa2cc" tickLine={false} axisLine={false} fontSize={11} />
                     <YAxis dataKey="rank" reversed stroke="#7fa2cc" tickLine={false} axisLine={false} fontSize={11} width={40} />
-                    <Tooltip contentStyle={{ background: "#071a3c", border: "1px solid #3979bd", borderRadius: 0, color: "#e8f4ff" }} labelFormatter={value => new Date(Number(value)).toLocaleString("zh-TW")} formatter={(value: number) => [`#${value}`, "排名"]} />
+                    <Tooltip contentStyle={{ background: "#071a3c", border: "1px solid #3979bd", borderRadius: 0, color: "#e8f4ff" }} labelFormatter={value => formatLocalDateTime(Number(value))} formatter={(value: number) => [`#${value}`, "排名"]} />
                     <Line type="monotone" dataKey="rank" stroke="#70e5ff" strokeWidth={2.5} dot={{ r: 3, fill: "#071a3c", stroke: "#70e5ff", strokeWidth: 2 }} activeDot={{ r: 5 }} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -60,7 +57,7 @@ export default function Home() {
             <div className="recent-list">
               {data?.recent.map(match => (
                 <Link href={`/matches/${match.id}`} key={match.id} className="recent-row">
-                  <span className="recent-time">{formatDate(match.battleAt)}</span>
+                  <span className="recent-time">{formatLocalShortDateTime(match.battleAt)}</span>
                   <ModeBadge mode={match.mode} />
                   <OutcomeBadge outcome={match.outcome} />
                   <span className="recent-opponent">{match.opponentName || "未標記對手"}</span>

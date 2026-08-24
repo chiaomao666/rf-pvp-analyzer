@@ -1,5 +1,6 @@
 import { BlueprintTag } from "@/components/PvpUi";
 import { Button } from "@/components/ui/button";
+import { getLocalDateTimeInputValue } from "@/lib/localTime";
 import { trpc } from "@/lib/trpc";
 import { Check, ChevronRight, ClipboardPenLine, Upload } from "lucide-react";
 import { useState } from "react";
@@ -17,7 +18,7 @@ export default function Record() {
   const utils = trpc.useUtils();
   const [mode, setMode] = useState<"1v1" | "3v3">("1v1");
   const [outcome, setOutcome] = useState<"win" | "loss" | "draw" | "unknown">("win");
-  const [battleAt, setBattleAt] = useState(() => new Date().toISOString().slice(0, 16));
+  const [battleAt, setBattleAt] = useState(() => getLocalDateTimeInputValue());
   const [opponentName, setOpponentName] = useState("");
   const [rankBefore, setRankBefore] = useState("");
   const [rankAfter, setRankAfter] = useState("");

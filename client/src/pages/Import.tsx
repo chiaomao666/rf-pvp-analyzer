@@ -1,5 +1,6 @@
 import { BlueprintTag, EmptyData } from "@/components/PvpUi";
 import { Button } from "@/components/ui/button";
+import { formatLocalDateTime } from "@/lib/localTime";
 import { trpc } from "@/lib/trpc";
 import { AlertTriangle, ClipboardPaste, Database, FileJson, Upload } from "lucide-react";
 import { useState } from "react";
@@ -131,7 +132,7 @@ export default function Import() {
           <div className="batch-list technical-frame">
             {imports.data.map(batch => (
               <article key={batch.id}>
-                <span><time>{new Date(batch.receivedAt).toLocaleString("zh-TW")}</time><b>{batch.label}</b></span>
+                <span><time>{formatLocalDateTime(batch.receivedAt)}</time><b>{batch.label}</b></span>
                 <span className="batch-count"><strong>{batch.recognizedCount}</strong> 已辨識 · <strong>{batch.rejectedCount}</strong> 未建立</span>
                 {batch.warnings.length ? <small>{batch.warnings[0]}</small> : <small>未回報辨識警告。</small>}
               </article>
