@@ -210,5 +210,5 @@
 - [x] 修正 GitHub Pages 公開頁面仍選用 local bridge、反覆呼叫 127.0.0.1 而未呼叫 Worker 的模式設定：有注入 Worker origin 且未保存模式時預設 remote，仍可明確切回 local。
 - [x] 修正受管部署啟動命令尋找 dist/index.js 但正式建置只產生 dist/public 的不一致：build 後產生 dist/index.js runtime entry。
 - [x] 補上公開 Remote Backend 模式與部署啟動契約回歸驗證；已通過 46 項 Vitest、TypeScript 與正式 Vite build。
-- [ ] 核對最新 remote backend 修正是否已提交並推送到使用者的 GitHub repository。
-- [ ] 確認 GitHub Pages workflow 重新建置並公開最新 bundle，且不再呼叫 127.0.0.1。
+- [x] 核對最新 remote backend 修正是否已提交並推送到使用者的 GitHub repository：commit `c5d08a0` 已推送至 `github/main`。
+- [x] 確認 GitHub Pages workflow 重新建置並公開最新 bundle：Pages 與 Worker workflow 均成功完成；公開 bundle 已包含 Worker origin 與舊 local 模式遷移邏輯。
