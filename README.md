@@ -69,3 +69,15 @@ pnpm build
 ```
 
 目前單元測試涵蓋 PVP JSON 正規化、分批匯入工具、刪除互動與 IndexedDB 完整備份還原（含本機自動編號）。
+
+## 本機橋接模式
+
+若要讓獲准的本機 mod 在遊戲進行時自動提交已整理的戰績摘要，請閱讀 [`bridge/README.md`](bridge/README.md)。bridge 綁定 `127.0.0.1` 並只保留記憶體中的最小化 `match` 事件；它不接收或儲存密碼、登入 token、cookie、原始 WebSocket frame，也不會把資料轉送到官方伺服器。啟動方式為：
+
+```powershell
+pnpm bridge
+```
+
+然後在帳號頁手動啟用「本機橋接」輪詢。工作區切換是純本機 IndexedDB 選取，不會觸發官方 API 重新驗證；自動匯入只會寫入當下選取的工作區。相同來源鍵會更新既有戰績，避免重複記錄。
+
+本機橋接是選用功能，不會影響 GitHub Pages 靜態網站的正常瀏覽。使用前仍須自行確認遊戲服務條款與 mod 授權範圍。

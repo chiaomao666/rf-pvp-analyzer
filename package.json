@@ -4,6 +4,7 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
+    "bridge": "node bridge/rf-bridge.mjs",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",

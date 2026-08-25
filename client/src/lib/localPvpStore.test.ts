@@ -1,7 +1,7 @@
 import { IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { activateStoredWorkspace, loginOfficialAccount, logoutWorkspace } from "./accountWorkspace";
-import { countUnscopedData, exportLocalBackup, getMatch, importPvpJson, listImports, listMatches, listProfiles, migrateUnscopedDataToProfile, parsePvpJson, restoreLocalBackup, saveMatch, setActiveProfileId, upsertProfile } from "./localPvpStore";
+import { countUnscopedData, exportLocalBackup, getMatch, importPvpJson, ingestBridgeMatch, listImports, listMatches, listProfiles, migrateUnscopedDataToProfile, parsePvpJson, restoreLocalBackup, saveMatch, setActiveProfileId, upsertProfile } from "./localPvpStore";
 
 beforeEach(() => {
   Object.defineProperty(globalThis, "indexedDB", { configurable: true, value: new IDBFactory() });
@@ -20,6 +20,13 @@ describe("parsePvpJson", () => {
     expect(parsed.records).toHaveLength(1);
     expect(parsed.records[0]).toMatchObject({ mode: "1v1", outcome: "win", rankBefore: 30, rankAfter: 22, scoreBefore: 6740, scoreAfter: 6860 });
   });
+  it("normalizes a five-versus-five bridge summary", () => {
+    const team = (prefix: string) => Array.from({ length: 5 }, (_, index) => ({ name: `${prefix}-${index}`, level: 80 }));
+    const parsed = parsePvpJson(JSON.stringify({ battleAt: 1787603139254, mode: "5v5", outcome: "loss", playerTeam: team("我方"), opponentTeam: team("敵方"), sourceBattleChannel: "pvp:ranked", sourceBattleId: "bridge-1" }));
+    expect(parsed.records[0]).toMatchObject({ mode: "5v5", outcome: "loss", sourceBattleId: "bridge-1" });
+    expect(parsed.records[0]?.playerTeam).toHaveLength(5);
+  });
+
   it("rejects incomplete candidates without throwing", () => {
     const parsed = parsePvpJson(JSON.stringify([{ mode: "1v1" }, { battleAt: Date.now(), mode: "3v3", playerTeam: ["我"], opponentTeam: ["敵"] }]));
     expect(parsed.records).toHaveLength(1);
@@ -71,6 +78,14 @@ describe("帳號工作區隔離與備份", () => {
     await expect(listImports()).resolves.toHaveLength(1);
   });
 
+  it("bridge 事件以來源鍵更新而不是重複建立", async () => {
+    const profile = await officialProfile("bridge-user"); setActiveProfileId(profile.id);
+    const input = { ...fixtureRecord("bridge-dedupe"), mode: "5v5" as const, playerTeam: [{ name: "我方" }], opponentTeam: [{ name: "敵方" }] };
+    await expect(ingestBridgeMatch(input)).resolves.toMatchObject({ created: true, updated: false });
+    await expect(ingestBridgeMatch({ ...input, outcome: "loss" })).resolves.toMatchObject({ created: false, updated: true });
+    await expect(listMatches()).resolves.toMatchObject([{ sourceBattleId: "bridge-dedupe", outcome: "loss" }]);
+  });
+
   it("只在明確呼叫遷移後才把 v1 未綁定資料指派給第一個帳號", async () => {
     const legacyRecords = Array.from({ length: 11 }, (_, index) => fixtureRecord(`legacy-source-${index + 1}`));
     const legacy = JSON.stringify({ format: "rf-pvp-analyzer/local-backup-v1", exportedAt: "2026-08-24T22:39:08.808Z", recordCount: 11, records: legacyRecords, imports: [{ receivedAt: 1787603139254, label: "舊資料", recognizedCount: 11, rejectedCount: 0, warnings: [] }] });
@@ -103,6 +118,14 @@ describe("帳號工作區隔離與備份", () => {
     expect(serialized).not.toContain("password"); expect(serialized).not.toContain("user_token");
     setActiveProfileId(profileB.id);
     await expect(restoreLocalBackup(serialized)).rejects.toThrow("屬於其他帳號工作區");
+  });
+
+  it("切換既有工作區只讀取本機資料，不重新呼叫官方 API", async () => {
+    const profileA = await officialProfile("local-a"); const profileB = await officialProfile("local-b");
+    vi.stubGlobal("fetch", vi.fn());
+    await expect(activateStoredWorkspace(profileA.id)).resolves.toMatchObject({ verifiedThisSession: false, profile: { id: profileA.id } });
+    await expect(activateStoredWorkspace(profileB.id)).resolves.toMatchObject({ verifiedThisSession: false, profile: { id: profileB.id } });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("登入成功後只保存官方 user_id profile，不保存本次回應的 user token", async () => {
