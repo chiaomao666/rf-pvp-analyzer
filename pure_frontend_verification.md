@@ -101,3 +101,4 @@
 - 使用者在公開 GitHub Pages 登入頁實測時，瀏覽器主控台明確回報官方 `users/log_in` 回應缺少 `Access-Control-Allow-Origin`，因此此網域的直接登入被 CORS 政策阻擋。這是伺服器對呼叫 origin 的政策，並非帳密驗證結果。
 - `loginOfficialAccount` 現在使用可中止的 12 秒限制；CORS／Cloudflare／網路拒絕或逾時都會結束登入流程、清除密碼欄，並以非帳密錯誤提示「請官方加入目前網域的 CORS 允許清單」或「使用自行管理的本機代理」。錯誤登入不會建立 profile 或設定活動工作區。
 - 新增 fetch 拒絕回歸案例後，`pnpm test` 通過 **7 個測試檔、26 個測試**；`pnpm check` 與 `GITHUB_ACTIONS=true pnpm build` 均通過。
+- GitHub Pages workflow [32846721338](https://github.com/chiaomao666/rf-pvp-analyzer/actions/runs/32846721338) 已成功部署 commit `4ebff23`。公開帳號頁載入後可見示範模式入口、CORS 技術說明、密碼顯示控制與工作區隔離文案；本次公開驗證未填入或傳送任何帳號、密碼或 token，因此不以真實認證重現 CORS 失敗畫面。
