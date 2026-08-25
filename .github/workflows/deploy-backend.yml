@@ -40,7 +40,7 @@ jobs:
           cp wrangler.toml.example wrangler.toml
           sed -i "s#REPLACE_WITH_D1_DATABASE_ID#$PVP_D1_DATABASE_ID#" wrangler.toml
           sed -i "s#https://chiaomao666.github.io#$PVP_API_ORIGIN#" wrangler.toml
-          printf '\\naccount_id = \"%s\"\\n' "$CLOUDFLARE_ACCOUNT_ID" >> wrangler.toml
+          sed -i "1i account_id = \"$CLOUDFLARE_ACCOUNT_ID\"" wrangler.toml
       - name: Apply D1 migrations
         run: wrangler d1 migrations apply rf-pvp-analyzer --remote --config wrangler.toml
         env:
