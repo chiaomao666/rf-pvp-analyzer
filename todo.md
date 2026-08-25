@@ -150,3 +150,8 @@
 - [x] 擴充 5v5 JSON 正規化、完整備份還原與 bridge 來源鍵去重匯入。
 - [x] 新增 bridge client、mod 接線範例、Windows／GitHub Pages 使用文件與 curl 健康檢查說明。
 - [x] 補上 bridge client、5v5 解析與 bridge 去重的 Vitest 回歸測試，並通過 TypeScript 檢查與正式建置。
+
+- [ ] 盤點目前 mod 是否已實際呼叫 Localhost Bridge client，確認遊戲資料到 bridge 的接線缺口。
+- [ ] 以最小白名單方式補上必要的 mod bridge 轉送接線，禁止傳送密碼、user_token、完整 raw frame 或非必要欄位。
+- [x] 修復 checkpoint 暴露的部署輸出路徑不一致問題，讓正式建置產物符合部署服務預期。
+- [x] 補上 mod 接線與部署輸出路徑回歸測試，重新驗證網站建置及 bridge smoke test。
