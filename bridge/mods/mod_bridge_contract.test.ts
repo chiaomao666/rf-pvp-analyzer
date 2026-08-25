@@ -37,6 +37,8 @@ describe("approved PVP mod bridge contract", () => {
     expect(guard).toContain('record.resultEvidence !== "official_player_medals"');
     expect(guard).toContain('window.RFLocalBridge?.sendMatch');
     expect(guard).toContain('text.includes("5v5")');
+    expect(guard).toContain('asObject(response?.["5v5"])');
+    expect(guard).toContain('asObject(nestedMedals?.["5v5"])');
   });
 
   it("keeps credentials and raw frames out of the embedded bridge client", () => {

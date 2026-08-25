@@ -492,8 +492,8 @@
       .map((capturedEvent) => {
         const response = unwrapPhoenixResponse(capturedEvent?.payload);
         const nestedMedals = asObject(response?.medals);
-        const hasTopLevelMode = Boolean(asObject(response?.["1v1"]) || asObject(response?.["3v3"]));
-        const hasNestedMode = Boolean(asObject(nestedMedals?.["1v1"]) || asObject(nestedMedals?.["3v3"]));
+        const hasTopLevelMode = Boolean(asObject(response?.["1v1"]) || asObject(response?.["3v3"]) || asObject(response?.["5v5"]));
+        const hasNestedMode = Boolean(asObject(nestedMedals?.["1v1"]) || asObject(nestedMedals?.["3v3"]) || asObject(nestedMedals?.["5v5"]));
         const hasPreviousRecord = Boolean(asObject(response?.previous_record) || asObject(nestedMedals?.previous_record));
         if (!/^player:\d+$/i.test(String(capturedEvent?.topic || "")) || !hasPreviousRecord || !(hasTopLevelMode || hasNestedMode)) return null;
         return { capturedEvent, response };

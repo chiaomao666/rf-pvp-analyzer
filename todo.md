@@ -205,3 +205,5 @@
 - [x] 查詢 D1 目前的事件筆數與最新寫入狀態。
 - [x] 新增獨立的 `rf_pvp_backend_config.js` 設定檔，並讓 loader 在 PVP 守衛前穩定載入它。
 - [x] 更新 mod contract 測試與文件，說明設定檔位置、endpoint、API key 與測試指令。
+- [x] 排查 mod 顯示已擷取但未送達分析網站的轉送、Worker 寫入與 workspace 查詢鏈路；確認 5v5 medals 辨識條件漏掉 5v5，且前端輪詢原先只在帳號頁執行。
+- [x] 補上 5v5 官方結果辨識回歸斷言與全站背景同步；已通過 45 項 Vitest、TypeScript、mod 語法檢查與正式 Vite build。
