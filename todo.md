@@ -198,3 +198,4 @@
 - [x] 修正 mod contract 測試對固定 `api/pvp/capture` 字串的過時斷言，改驗證可配置 Worker endpoint 與 localhost fallback。
 - [ ] 在 GitHub repository 設定 `CLOUDFLARE_API_TOKEN` secret 與 `CLOUDFLARE_ACCOUNT_ID`、`PVP_D1_DATABASE_ID`、`PVP_API_ORIGIN`、`PVP_BACKEND_ORIGIN` variables 後重跑並驗證 Actions。
 - [ ] 修正 backend workflow 以真正換行寫入 `account_id`，避免產生含字面 `\\n` 的非法 TOML。
+- [ ] 將 Worker `compatibility_date` 從會被 runner 判定為未來的日期改成固定過去日期，重新部署並驗證。
