@@ -123,4 +123,4 @@
 - [x] 在密碼欄加入無障礙的顯示／隱藏按鈕，確保不改變密碼的持久化規則。
 - [x] 為帳號頁每個主要資訊格補上清楚的技術外框，維持既有深藍 HUD 視覺與行動版可用性。
 - [x] 為 medals 訊框過濾、密碼顯示控制與帳號頁視覺更新完成回歸測試、靜態建置與 GitHub Pages 部署驗證。
-- [ ] 將 medals-only、密碼顯示按鈕與帳號頁外框更新提交並推送到 `chiaomao666/rf-pvp-analyzer`，確認新的 GitHub Pages workflow 成功且公開站包含此版面。
+- [x] 將 medals-only、密碼顯示按鈕與帳號頁外框更新提交並推送到 `chiaomao666/rf-pvp-analyzer`，確認新的 GitHub Pages workflow 成功且公開站包含此版面。

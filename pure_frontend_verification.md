@@ -93,3 +93,5 @@
 - 新增的 Phoenix 回歸測試以假的 WebSocket 驗證：僅依序送出 `player:<user_id>` 的 `phx_join` 與 `medals`；收到成功回覆時只將 `response.medals` 存成快照，即使回覆同時含有 score、rank、Union 等欄位，快照也不含那些欄位。
 - `pnpm test` 通過 **7 個測試檔、25 個測試**；`pnpm check` 及 `GITHUB_ACTIONS=true pnpm build` 均通過。Vite 僅提出既有主 JavaScript chunk 超過 500KB 的非阻斷警告。
 - `/#/account` 已以桌面與 390px 行動版截圖核對：密碼欄有明確的「顯示／隱藏」控制，主要面板、表單欄、工作區提示與風險／CORS 資訊格均具有一致的 HUD 外框；測試不涉及任何真實認證資料。
+- 2026-08-25 GitHub Pages workflow [32839728930](https://github.com/chiaomao666/rf-pvp-analyzer/actions/runs/32839728930) 已成功部署 commit `a7ff04d`。公開根頁 <https://chiaomao666.github.io/rf-pvp-analyzer/> 回應 200 並載入新入口資源；由根頁站內 Hash 導覽至 `#/account` 後，可見「MEDALS ONLY」資料範圍、密碼「顯示」按鈕，以及所有主要登入、工作區與風險資訊格的外框。
+- 在公開帳號頁直接點選「顯示」後，密碼輸入欄由 `type="password"` 切換為 `type="text"`，按鈕文字與提示同步改為「隱藏」；此互動未填入帳密、未送出登入請求。
