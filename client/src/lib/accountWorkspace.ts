@@ -3,6 +3,7 @@ import { requestOfficialMedals } from "./officialMedalsSocket";
 
 const LOGIN_ENDPOINT = "https://api.komisureiya.com/api/users/log_in";
 const OFFICIAL_APP_VERSION = "2.28";
+const LOGIN_TIMEOUT_MS = 12_000;
 // 這是官方瀏覽器主程式已公開的相容設定，不是使用者憑證或可持久化 token。
 const OFFICIAL_PUBLIC_CLIENT_KEY = "t9cTpsbSCYcJgsrrC";
 
@@ -54,10 +55,17 @@ export async function loginOfficialAccount(account: string, password: string) {
     key: OFFICIAL_PUBLIC_CLIENT_KEY,
   });
   let response: Response;
+  const controller = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), LOGIN_TIMEOUT_MS);
   try {
-    response = await fetch(LOGIN_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8", Accept: "application/json" }, body: body.toString() });
+    response = await fetch(LOGIN_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8", Accept: "application/json" }, body: body.toString(), signal: controller.signal });
   } catch {
-    throw new OfficialLoginError("cors-or-cloudflare", "無法連線至遊戲伺服器。這可能是瀏覽器 CORS、Cloudflare 或網路連線限制，而不代表帳號或密碼錯誤。 ");
+    const timeoutMessage = controller.signal.aborted
+      ? "登入連線已在 12 秒後停止。這不是帳號或密碼判定；可能是官方伺服器、Cloudflare 或網路未回應。"
+      : "登入 API 未允許目前 GitHub Pages 網域的跨來源連線，或被 Cloudflare／網路攔截。這不是帳號或密碼錯誤。請使用示範模式，或請官方將目前網站網域加入 CORS 允許清單；也可在自行管理的本機代理環境測試。";
+    throw new OfficialLoginError("cors-or-cloudflare", timeoutMessage);
+  } finally {
+    globalThis.clearTimeout(timeoutId);
   }
   let payload: unknown;
   try { payload = await response.json(); }

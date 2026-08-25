@@ -1,7 +1,7 @@
 import { IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { activateStoredWorkspace, loginOfficialAccount, logoutWorkspace } from "./accountWorkspace";
-import { countUnscopedData, exportLocalBackup, getMatch, importPvpJson, listImports, listMatches, migrateUnscopedDataToProfile, parsePvpJson, restoreLocalBackup, saveMatch, setActiveProfileId, upsertProfile } from "./localPvpStore";
+import { countUnscopedData, exportLocalBackup, getMatch, importPvpJson, listImports, listMatches, listProfiles, migrateUnscopedDataToProfile, parsePvpJson, restoreLocalBackup, saveMatch, setActiveProfileId, upsertProfile } from "./localPvpStore";
 
 beforeEach(() => {
   Object.defineProperty(globalThis, "indexedDB", { configurable: true, value: new IDBFactory() });
@@ -102,5 +102,13 @@ describe("帳號工作區隔離與備份", () => {
     expect(JSON.stringify(backup)).not.toContain("test-session-token");
     logoutWorkspace();
     await expect(activateStoredWorkspace("official:918")).resolves.toMatchObject({ verifiedThisSession: false, profile: { id: "official:918" } });
+  });
+
+  it("瀏覽器 CORS 型 fetch 拒絕會回報非帳密錯誤，並且不建立工作區", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    await expect(loginOfficialAccount("tester", "only-for-request")).rejects.toMatchObject({
+      kind: "cors-or-cloudflare",
+    });
+    expect(await listProfiles()).toEqual([]);
   });
 });
