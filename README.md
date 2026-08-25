@@ -1,89 +1,71 @@
 # RF PVP 戰績分析站
 
-此專案是 **Reversed Front 排名戰紀錄與分析網站**。它以 React、Express、tRPC、Drizzle 與 MySQL 建構，提供匿名瀏覽器裝置資料範圍、手動建檔、JSON 匯入、戰績篩選、列表刪除及排名統計。
+此專案是 **Reversed Front 排名戰紀錄與分析網站**的純前端版本。網站由 React 與 Vite 建置，所有戰績、匯入批次與統計資料都只保存於目前瀏覽器的 **IndexedDB**；不需要帳戶、伺服器、MySQL 或任何環境變數，因此可直接部署到 GitHub Pages。
 
-> **重要：GitHub 是原始碼託管平台，不是此專案可直接使用的執行環境。** 本站有 Express／tRPC 後端與 MySQL 資料庫，因此不能直接部署至 GitHub Pages。請將本專案推送至 GitHub，再連接支援 Node.js 與 MySQL 的主機；目前的 Manus 網站部署不受本 ZIP 影響。
+> **資料保存原則：** 資料只屬於「目前瀏覽器 + 目前網站網域」。清除該網站的瀏覽器資料、使用無痕模式、換用其他瀏覽器或改用其他網域，都不會看見原有戰績。每次重要匯入後，請在「匯入資料」頁下載完整 JSON 備份。
 
-## 技術需求
+## 功能
 
-| 項目 | 需求 |
+| 功能 | 純前端行為 |
 | --- | --- |
-| Node.js | 22 或更新版本 |
-| 套件管理器 | pnpm 10 |
-| 資料庫 | MySQL 8 或相容的 TiDB／PlanetScale 類服務 |
-| 執行環境 | 可執行常駐 Node.js HTTP 服務的主機 |
+| 手動建立戰績 | 直接寫入本機 IndexedDB。 |
+| PVP 守衛 JSON 匯入 | 由瀏覽器解析，支援來源識別去重與更新。 |
+| 歷史、篩選、詳情、排名統計 | 全部由本機資料即時計算，不發出資料 API 請求。 |
+| 刪除戰績 | 使用頁內確認對話刪除目前瀏覽器的本機資料。 |
+| 完整備份／還原 | 匯出所有本機戰績與匯入摘要；可在另一台裝置或 GitHub Pages 網域還原。 |
 
 ## 本機啟動
 
-> **不要直接雙擊 `client/index.html`。** 它是 Vite 的 TypeScript／React 原始入口，不是可離線開啟的 HTML 成品；以 `file:///.../client/index.html` 開啟時沒有 Vite、Express、tRPC API 或資料庫，所以瀏覽器只會顯示空白頁。
+需要 [Node.js 22 或更新版本](https://nodejs.org/) 與 pnpm 10。Windows 使用者先在 PowerShell 執行一次：
 
-### Windows 最簡單方式
+```powershell
+corepack enable
+corepack prepare pnpm@10.4.1 --activate
+```
 
-先安裝 [Node.js 22+](https://nodejs.org/)，在 PowerShell 執行一次 `corepack enable` 以啟用 pnpm。接著在解壓後的專案根目錄**雙擊 `START_WINDOWS.bat`**。
+之後解壓專案並雙擊根目錄的 `START_WINDOWS.bat`。它會在首次執行時安裝相依套件並啟動 Vite；請依終端畫面顯示的網址開啟網站，通常是 `http://localhost:5173`。
 
-第一次執行會建立並開啟 `.env`。請填入可連線的 MySQL `DATABASE_URL` 與足夠長的 `JWT_SECRET`，存檔後再雙擊 `START_WINDOWS.bat`。它會安裝套件、套用資料庫結構並啟動伺服器；完成後請在瀏覽器開啟 **http://localhost:3000**，不要開啟 `client/index.html`。
-
-### 手動啟動方式
-
-如不使用 Windows 批次檔，先複製環境範本、填入資料庫連線字串，接著安裝相依套件並建立資料表。
+也可以手動執行：
 
 ```bash
-cp env.template .env
 pnpm install --frozen-lockfile
-pnpm db:push
 pnpm dev
 ```
 
-開發伺服器預設使用 `http://localhost:3000`。匿名模式會在瀏覽器 `localStorage` 建立裝置識別，因此清除瀏覽器網站資料或改用其他瀏覽器後，將無法看見舊裝置的匿名戰績；請先匯出 JSON 備份。
+> **不要直接雙擊 `client/index.html`。** 它是 Vite 的原始入口，不是已建置的網站。若意外以 `file:///.../client/index.html` 開啟，頁面會顯示正確的啟動指引；請改用上方的本機伺服器網址。
 
-## 正式部署
+## 備份與還原
 
-在目標平台設定本文件下列必要環境變數後，使用以下指令建立與啟動服務：
+在舊版網站下載的 `rf-pvp-backup-*.json` 可直接在純前端版的「匯入資料」頁選擇「還原完整備份」。還原前可選擇清除目前本機資料。成功後，請到「戰績歷史」及「總覽」確認筆數、勝敗與排名摘要。
 
-```bash
-pnpm install --frozen-lockfile
-pnpm check
-pnpm build
-pnpm start
-```
+此專案不會把備份上傳至 GitHub、Manus 或第三方服務。備份檔可能含隊伍、對手、排名與原始封包內容，請自行保存並避免公開分享。
 
-部署平台通常會提供 `PORT`；程式會優先監聽該值。資料庫結構必須先以 `pnpm db:push` 或等效的 Drizzle migration 流程套用。現有 Manus 資料庫資料、帳戶、工作階段及任何平台密鑰**不包含**在此原始碼套件中，也不會自動移轉到新主機。
+## 部署至 GitHub Pages
 
-## 環境變數
+本專案已包含 `.github/workflows/deploy-pages.yml`。目前預設對應 GitHub 儲存庫名稱 **`rf-pvp-analyzer`**；若你使用不同的儲存庫名稱，請先把 `vite.config.ts` 的 `base` 改為 `/<儲存庫名稱>/`。
 
-| 變數 | 是否必要 | 用途 |
-| --- | --- | --- |
-| `DATABASE_URL` | 是 | MySQL 相容資料庫連線字串。 |
-| `JWT_SECRET` | 是 | 保護既有帳戶工作階段的隨機密鑰；即使主要使用匿名模式仍應設定。 |
-| `PORT` | 否 | 服務監聽埠；多數主機會自動注入。 |
-| `VITE_APP_ID` | 僅保留 Manus OAuth 時 | Manus OAuth 應用程式識別。 |
-| `OAUTH_SERVER_URL` | 僅保留 Manus OAuth 時 | Manus OAuth 服務端點。 |
-| `OWNER_OPEN_ID` | 否 | Manus 平台擁有者識別。 |
-| `BUILT_IN_FORGE_API_URL`、`BUILT_IN_FORGE_API_KEY` | 僅使用 Manus Storage Proxy 時 | Manus 儲存服務代理。 |
-| `VITE_ANALYTICS_ENDPOINT`、`VITE_ANALYTICS_WEBSITE_ID` | 否 | 前端分析端點設定。 |
+建立或使用 GitHub 儲存庫後，在專案根目錄執行：
 
-請勿將 `.env`、正式資料庫連線字串、JWT 密鑰或平台 API 金鑰提交到 GitHub。
-
-## 推送至 GitHub
-
-解壓 ZIP 後，在專案根目錄執行：
-
-```bash
-git init
+```powershell
 git add .
-git commit -m "Initial import of RF PVP Analyzer"
-git branch -M main
-git remote add origin https://github.com/<你的帳號>/<你的儲存庫>.git
+git commit -m "Convert to static IndexedDB GitHub Pages app"
 git push -u origin main
 ```
 
-`.gitignore` 已排除 `node_modules`、`.env`、資料庫檔案、Manus 執行期紀錄與本機專案設定；請在推送前再次以 `git status` 確認沒有機密檔案。
+接著在 GitHub 儲存庫開啟 **Settings → Pages**，於 **Build and deployment** 將 Source 設成 **GitHub Actions**。推送至 `main` 後，GitHub Actions 會安裝 pnpm、執行 `pnpm build`，並發布 `dist/`。部署完成後，網址通常是：
+
+```text
+https://chiaomao666.github.io/rf-pvp-analyzer/
+```
+
+網站採用 Hash 路由，因此重新整理 `#/matches`、`#/record` 或 `#/import` 時不會觸發 GitHub Pages 的檔案路徑 404。
 
 ## 驗證
 
 ```bash
 pnpm test
 pnpm check
+pnpm build
 ```
 
-目前專案的 Vitest 回歸測試涵蓋匿名裝置資料隔離、建立／匯入／列表／刪除、跨裝置存取限制、匯入去重與排名統計。
+目前單元測試涵蓋 PVP JSON 正規化、分批匯入工具、刪除互動與 IndexedDB 完整備份還原（含本機自動編號）。

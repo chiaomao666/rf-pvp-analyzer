@@ -9,13 +9,11 @@ import MatchDetail from "@/pages/MatchDetail";
 import Matches from "@/pages/Matches";
 import NotFound from "@/pages/NotFound";
 import Record from "@/pages/Record";
-import { Route, Switch } from "wouter";
+import { Route, Router, Switch } from "wouter";
+import { useHashLocation } from "wouter/use-hash-location";
 
-function Shell({ children }: { children: React.ReactNode }) {
-  return <DashboardLayout>{children}</DashboardLayout>;
-}
-
-function Router() {
+function Shell({ children }: { children: React.ReactNode }) { return <DashboardLayout>{children}</DashboardLayout>; }
+function AppRoutes() {
   return <Switch>
     <Route path="/"><Shell><Home /></Shell></Route>
     <Route path="/matches"><Shell><Matches /></Shell></Route>
@@ -28,5 +26,5 @@ function Router() {
 }
 
 export default function App() {
-  return <ErrorBoundary><ThemeProvider defaultTheme="dark"><TooltipProvider><Toaster /><Router /></TooltipProvider></ThemeProvider></ErrorBoundary>;
+  return <ErrorBoundary><ThemeProvider defaultTheme="dark"><TooltipProvider><Toaster /><Router hook={useHashLocation}><AppRoutes /></Router></TooltipProvider></ThemeProvider></ErrorBoundary>;
 }
