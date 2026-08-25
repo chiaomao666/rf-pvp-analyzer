@@ -196,6 +196,12 @@
 - [x] 推送獨立後端與前端部署設定至使用者 GitHub repository，並驗證 Actions workflow。
 - [x] 交付 mod 檔案與 Cloudflare 設定步驟。
 - [x] 修正 mod contract 測試對固定 `api/pvp/capture` 字串的過時斷言，改驗證可配置 Worker endpoint 與 localhost fallback。
-- [ ] 在 GitHub repository 設定 `CLOUDFLARE_API_TOKEN` secret 與 `CLOUDFLARE_ACCOUNT_ID`、`PVP_D1_DATABASE_ID`、`PVP_API_ORIGIN`、`PVP_BACKEND_ORIGIN` variables 後重跑並驗證 Actions。
-- [ ] 修正 backend workflow 以真正換行寫入 `account_id`，避免產生含字面 `\\n` 的非法 TOML。
-- [ ] 將 Worker `compatibility_date` 從會被 runner 判定為未來的日期改成固定過去日期，重新部署並驗證。
+- [x] 在 GitHub repository 設定 `CLOUDFLARE_API_TOKEN` secret 與 `CLOUDFLARE_ACCOUNT_ID`、`PVP_D1_DATABASE_ID`、`PVP_API_ORIGIN`、`PVP_BACKEND_ORIGIN` variables 後重跑並驗證 Actions。
+- [x] 修正 backend workflow 以真正換行寫入 `account_id`，避免產生含字面 `\\n` 的非法 TOML。
+- [x] 將 Worker `compatibility_date` 從會被 runner 判定為未來的日期改成固定過去日期，重新部署並驗證。
+- [x] 釐清 Worker health 路徑：公開 Worker 使用 `/api/pvp/health`；前端與 mod 契約已一致，並完成公開 200 回應驗證。
+- [x] 核對並整理 mod 直傳 Worker 的 endpoint、API key 與測試方法。
+- [x] 核對 Pages 到 Worker 的 CORS 設定與實際 origin。
+- [x] 查詢 D1 目前的事件筆數與最新寫入狀態。
+- [x] 新增獨立的 `rf_pvp_backend_config.js` 設定檔，並讓 loader 在 PVP 守衛前穩定載入它。
+- [x] 更新 mod contract 測試與文件，說明設定檔位置、endpoint、API key 與測試指令。

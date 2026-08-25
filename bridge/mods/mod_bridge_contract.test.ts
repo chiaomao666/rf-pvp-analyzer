@@ -9,6 +9,8 @@ describe("approved PVP mod bridge contract", () => {
     const guard = read("pvp_double_match_guard.js");
     expect(loader).not.toContain('src: "./mods/rf_bridge_client.js"');
     expect(loader).not.toContain("全局記憶體優化器");
+    expect(loader).toContain('src: "./mods/rf_pvp_backend_config.js"');
+    expect(loader.indexOf('src: "./mods/rf_pvp_backend_config.js"')).toBeLessThan(loader.indexOf('src: "./mods/pvp_double_match_guard.js"'));
     expect(loader).toContain('src: "./mods/pvp_double_match_guard.js"');
     expect(guard).toContain("installEmbeddedBridgeClient");
     expect(guard).toContain('body: JSON.stringify(requestBody)');
@@ -21,6 +23,13 @@ describe("approved PVP mod bridge contract", () => {
     expect(guard).toContain('window.RF_PVP_BACKEND_ENDPOINT');
     expect(guard).toContain('X-RF-API-Key');
     expect(guard).toContain('workspaceId: String(record.sourcePlayerUserId');
+  });
+
+  it("provides a configurable Worker endpoint without embedding a real credential", () => {
+    const config = read("rf_pvp_backend_config.js");
+    expect(config).toContain("/api/pvp/capture");
+    expect(config).toContain("PASTE_YOUR_PVP_API_KEY_HERE");
+    expect(config).not.toMatch(/sk_live|Bearer\s+[A-Za-z0-9._-]{20,}/i);
   });
 
   it("only forwards records after official player medals evidence", () => {

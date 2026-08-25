@@ -5,6 +5,12 @@ console.log("[LOADER] 小工具載入器啟動");
 (function(){
     // ---- 在這裡集中管理所有小工具 ----
     const TOOLS = [
+        // 必須最先載入，讓 pvp_double_match_guard.js 初始化前取得 Worker endpoint 與 API key。
+        { id: "RF PVP Worker 連線設定",
+            src: "./mods/rf_pvp_backend_config.js",
+            css: null,
+            enabled: true
+        },
         { id: "據點顯示優化",
             src: "./mods/custom_attackmap.js",
             css: "./mods/custom_attackmap.css", 
