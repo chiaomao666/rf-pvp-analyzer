@@ -1,6 +1,40 @@
 (() => {
   "use strict";
 
+  // 瀏覽器側 bridge client 內嵌於本守衛；Node localhost server 仍維持獨立檔案。
+  const BRIDGE_ENDPOINT = "http://127.0.0.1:8787/v1/capture";
+  const BRIDGE_ALLOWED_KEYS = [
+    "battleAt", "mode", "outcome", "playerTeam", "opponentTeam", "opponentName",
+    "rankBefore", "rankAfter", "scoreBefore", "scoreAfter", "notes",
+    "sourceBattleChannel", "sourceBattleId",
+  ];
+
+  function installEmbeddedBridgeClient() {
+    if (window.RFLocalBridge?.sendMatch) return;
+    const sanitize = (summary) => {
+      if (!summary || typeof summary !== "object" || Array.isArray(summary)) {
+        throw new Error("match summary must be an object");
+      }
+      return Object.fromEntries(
+        BRIDGE_ALLOWED_KEYS.filter((key) => key in summary).map((key) => [key, summary[key]]),
+      );
+    };
+    const sendMatch = async (summary) => {
+      const response = await fetch(BRIDGE_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "match", data: sanitize(summary) }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.accepted) throw new Error(payload.error || `bridge HTTP ${response.status}`);
+      return payload;
+    };
+    window.RFLocalBridge = Object.freeze({ sendMatch, endpoint: BRIDGE_ENDPOINT });
+    console.log("[RF bridge] embedded client ready; loopback only");
+  }
+
+  installEmbeddedBridgeClient();
+
   const MOD_NAME = "PVP Passive Match Monitor";
   const LOG_KEY = "rf_pvp_intercept_logs";
   const EVENT_KEY = "rf_pvp_event_archive";

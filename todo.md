@@ -160,3 +160,8 @@
 - [x] 以最小白名單摘要把 PVP 結果安全轉送至 Localhost Bridge，禁止傳送憑證、token 與完整原始訊框。
 - [x] 為實際 mod bridge 接線補上去敏、去重與失敗不阻塞遊戲的測試。
 - [x] 修復受管部署使用 Node 啟動時缺少 dist/index.js 的啟動契約，並重新驗證部署建置。
+
+- [x] 確認並移除未使用的全局記憶體優化器及其載入器／文件引用。
+- [x] 設計並實作可直接給 mod 使用的合併 bridge 檔案，同時保留 Node bridge server 的獨立啟動能力。
+- [x] 更新 loader、Windows 啟動檔、bridge 文件與 contract 測試以符合合併後結構。
+- [x] 重新執行 Vitest、TypeScript、mod 語法檢查、正式建置與 bridge smoke test。

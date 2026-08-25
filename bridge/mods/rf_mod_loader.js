@@ -80,20 +80,10 @@ console.log("[LOADER] 小工具載入器啟動");
             css: null,
             enabled: false
         },
-        { id: "排名戰本機橋接傳送",
-            src: "./mods/rf_bridge_client.js",
-            css: null,
-            enabled: true
-        },
         { id: "排名戰重複配對攔截",
             src: "./mods/pvp_double_match_guard.js",
             css: null,
             enabled: true
-        },
-        { id: "全局記憶體優化器",
-            src: null,
-            css: null,
-            enabled: false
         },
         { id: "Mod 效能分析器",
             src: "./mods/rf_mod_profiler.js",

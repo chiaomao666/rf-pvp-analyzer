@@ -4,9 +4,14 @@ import { describe, expect, it } from "vitest";
 const read = (name: string) => readFileSync(new URL(`./${name}`, import.meta.url), "utf8");
 
 describe("approved PVP mod bridge contract", () => {
-  it("loads bridge client before the PVP guard", () => {
+  it("loads the self-contained PVP guard without a separate bridge client", () => {
     const loader = read("rf_mod_loader.js");
-    expect(loader.indexOf('src: "./mods/rf_bridge_client.js"')).toBeLessThan(loader.indexOf('src: "./mods/pvp_double_match_guard.js"'));
+    const guard = read("pvp_double_match_guard.js");
+    expect(loader).not.toContain('src: "./mods/rf_bridge_client.js"');
+    expect(loader).not.toContain("全局記憶體優化器");
+    expect(loader).toContain('src: "./mods/pvp_double_match_guard.js"');
+    expect(guard).toContain("installEmbeddedBridgeClient");
+    expect(guard).toContain('body: JSON.stringify({ type: "match", data: sanitize(summary) })');
   });
 
   it("only forwards records after official player medals evidence", () => {
@@ -16,9 +21,10 @@ describe("approved PVP mod bridge contract", () => {
     expect(guard).toContain('text.includes("5v5")');
   });
 
-  it("keeps credentials and raw frames out of the bridge client", () => {
-    const client = read("rf_bridge_client.js");
-    expect(client).toContain('type: "match"');
-    expect(client).not.toMatch(/password|user_token|authorization|cookie|rawEvent|rawFrame|rawEvents/i);
+  it("keeps credentials and raw frames out of the embedded bridge client", () => {
+    const guard = read("pvp_double_match_guard.js");
+    const embeddedClient = guard.slice(guard.indexOf("function installEmbeddedBridgeClient"), guard.indexOf("const MOD_NAME"));
+    expect(embeddedClient).toContain('type: "match"');
+    expect(embeddedClient).not.toMatch(/password|user_token|authorization|cookie|rawEvent|rawFrame|rawEvents/i);
   });
 });

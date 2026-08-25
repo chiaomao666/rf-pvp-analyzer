@@ -34,7 +34,7 @@ curl.exe -X POST http://127.0.0.1:8787/v1/capture `
 
 ## mod 接線
 
-在獲准的 mod loader 中載入 `rf_bridge_client.js`，它會提供 `window.RFLocalBridge.sendMatch(summary)`。mod 必須自行依照遊戲事件整理出摘要，不應把原始遊戲封包直接交給 bridge：
+在獲准的 mod loader 中只需載入 `pvp_double_match_guard.js`；它已內嵌 bridge client，會提供 `window.RFLocalBridge.sendMatch(summary)`。mod 必須自行依照遊戲事件整理出摘要，不應把原始遊戲封包直接交給 bridge：
 
 ```js
 window.RFLocalBridge?.sendMatch({
@@ -67,4 +67,4 @@ Bridge 不會把事件轉送到官方伺服器，也不會取代官方登入與 
 
 ## Modified mod bundle
 
-The ready-to-copy loader and PVP bridge files are in `bridge/mods/`. The panel loader must load `rf_bridge_client.js` before `pvp_double_match_guard.js`. The no-panel loader is not patched because it does not install the passive WebSocket tap or load the PVP guard.
+The ready-to-copy files are in `bridge/mods/`. The panel loader now loads only `pvp_double_match_guard.js`; its browser-side bridge client is embedded inside that file, so `rf_bridge_client.js` is no longer required. The no-panel loader remains unchanged because it does not install the passive WebSocket tap or load the PVP guard. `rf-bridge.mjs` is intentionally kept as a separate Node process because it binds the localhost port and cannot run inside a browser mod.
