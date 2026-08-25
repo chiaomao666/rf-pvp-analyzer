@@ -87,3 +87,9 @@
 - 開發站以 Hash URL `/#/account` 實測可載入帳號工作區頁：遊戲帳號／密碼表單、風險核取方塊、示範模式、既有工作區、未綁定資料轉移提示及 CORS／Cloudflare 說明皆正常顯示。此驗證沒有使用任何真實帳號或密碼，也沒有呼叫有效登入。
 - 靜態站的路由必須使用 Hash，例如 `#/account`；直接開啟 `/account` 由靜態主機回退至首頁屬預期行為，並不代表帳號頁路由失效。
 - 以使用者原始 `local-backup-v1` 在**獨立 fake IndexedDB 測試程序**完成遷移驗證：原始檔僅讀取、不寫入專案、未上傳或輸出；未選工作區時資料維持未綁定，經明確遷移後，**11 筆**皆屬目標工作區；切換至第二工作區後列表為空。一次性驗證程式已在測試後刪除。
+
+## medals-only 查詢與帳號頁改善
+
+- 新增的 Phoenix 回歸測試以假的 WebSocket 驗證：僅依序送出 `player:<user_id>` 的 `phx_join` 與 `medals`；收到成功回覆時只將 `response.medals` 存成快照，即使回覆同時含有 score、rank、Union 等欄位，快照也不含那些欄位。
+- `pnpm test` 通過 **7 個測試檔、25 個測試**；`pnpm check` 及 `GITHUB_ACTIONS=true pnpm build` 均通過。Vite 僅提出既有主 JavaScript chunk 超過 500KB 的非阻斷警告。
+- `/#/account` 已以桌面與 390px 行動版截圖核對：密碼欄有明確的「顯示／隱藏」控制，主要面板、表單欄、工作區提示與風險／CORS 資訊格均具有一致的 HUD 外框；測試不涉及任何真實認證資料。

@@ -119,3 +119,8 @@
 - [x] 從未修改的官方主程式盤點登入端點、公開組態、app version、回應欄位與可確認的 WebSocket endpoint／player channel；不將未實測的握手參數視為契約，也不提交任何未授權憑證。
 - [x] 比對官方主程式與 GitHub Pages origin 的 CORS／Cloudflare 行為，確認直連是否可行或必須使用官方允許的代理。
 - [x] 在不污染真實資料的隔離 fake IndexedDB 中，以原始 11 筆 v1 備份驗證未綁定資料遷移、帳號歸屬與第二帳號隔離；一次性測試檔於驗證後移除。
+- [x] 依 player channel 的官方 Phoenix 回應，實作僅擷取並保存 `medals` 結果資料的登入後查詢流程。
+- [x] 在密碼欄加入無障礙的顯示／隱藏按鈕，確保不改變密碼的持久化規則。
+- [x] 為帳號頁每個主要資訊格補上清楚的技術外框，維持既有深藍 HUD 視覺與行動版可用性。
+- [x] 為 medals 訊框過濾、密碼顯示控制與帳號頁視覺更新完成回歸測試、靜態建置與 GitHub Pages 部署驗證。
+- [ ] 將 medals-only、密碼顯示按鈕與帳號頁外框更新提交並推送到 `chiaomao666/rf-pvp-analyzer`，確認新的 GitHub Pages workflow 成功且公開站包含此版面。

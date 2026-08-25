@@ -1,4 +1,5 @@
 import { getProfile, LocalProfile, setActiveProfileId, upsertProfile } from "./localPvpStore";
+import { requestOfficialMedals } from "./officialMedalsSocket";
 
 const LOGIN_ENDPOINT = "https://api.komisureiya.com/api/users/log_in";
 const OFFICIAL_APP_VERSION = "2.28";
@@ -13,6 +14,7 @@ export class OfficialLoginError extends Error {
 }
 
 let session: WorkspaceSession | null = null;
+let memoryOnlyUserToken: string | null = null;
 
 function notify() { if (typeof window !== "undefined") window.dispatchEvent(new Event("rf-pvp-account-change")); }
 function asObject(value: unknown): Record<string, unknown> | null { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null; }
@@ -20,6 +22,7 @@ function id(value: unknown) { return typeof value === "string" && value.trim() ?
 
 export function getWorkspaceSession() { return session; }
 export async function restoreStoredWorkspace(profileId: string | null) {
+  memoryOnlyUserToken = null;
   if (!profileId) { session = null; notify(); return null; }
   const profile = await getProfile(profileId);
   session = profile ? { profile, verifiedThisSession: false } : null;
@@ -30,11 +33,12 @@ export async function restoreStoredWorkspace(profileId: string | null) {
 export async function activateStoredWorkspace(profileId: string) {
   const profile = await getProfile(profileId);
   if (!profile) throw new Error("找不到此裝置上的帳號工作區。 ");
-  setActiveProfileId(profile.id); session = { profile, verifiedThisSession: false }; notify(); return session;
+  memoryOnlyUserToken = null; setActiveProfileId(profile.id); session = { profile, verifiedThisSession: false }; notify(); return session;
 }
-export function logoutWorkspace() { session = null; setActiveProfileId(null); notify(); }
+export function logoutWorkspace() { memoryOnlyUserToken = null; session = null; setActiveProfileId(null); notify(); }
 
 export async function createDemoWorkspace() {
+  memoryOnlyUserToken = null;
   const profile: LocalProfile = { id: "demo:local", kind: "demo", createdAt: Date.now() };
   await upsertProfile(profile); setActiveProfileId(profile.id); session = { profile, verifiedThisSession: false }; notify(); return session;
 }
@@ -66,6 +70,18 @@ export async function loginOfficialAccount(account: string, password: string) {
   const userId = result?.status === "ok" ? id(data?.user_id) : null;
   if (!userId) throw new OfficialLoginError("credentials", "遊戲伺服器未確認此帳號。請確認帳號與密碼，或稍後再試。 ");
   const now = Date.now(); const profile: LocalProfile = { id: `official:${userId}`, externalUserId: userId, kind: "official", createdAt: (await getProfile(`official:${userId}`))?.createdAt ?? now, lastVerifiedAt: now };
-  await upsertProfile(profile); setActiveProfileId(profile.id); session = { profile, verifiedThisSession: true }; notify();
+  await upsertProfile(profile); setActiveProfileId(profile.id); memoryOnlyUserToken = typeof data?.user_token === "string" && data.user_token ? data.user_token : null; session = { profile, verifiedThisSession: true }; notify();
+  return session;
+}
+
+export async function refreshOfficialMedals() {
+  if (!session?.verifiedThisSession || session.profile.kind !== "official" || !session.profile.externalUserId || !memoryOnlyUserToken) {
+    throw new Error("請先在本次工作階段完成官方登入，才能取得 medals 資料。重新整理或切換工作區後需要重新登入。");
+  }
+  const medalsSnapshot = await requestOfficialMedals(session.profile.externalUserId, memoryOnlyUserToken);
+  const profile: LocalProfile = { ...session.profile, medalsSnapshot };
+  await upsertProfile(profile);
+  session = { profile, verifiedThisSession: true };
+  notify();
   return session;
 }

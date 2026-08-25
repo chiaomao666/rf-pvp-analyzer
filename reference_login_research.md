@@ -34,3 +34,10 @@
 - 完整備份新增 `local-backup-v2` 及 profile metadata；v2 只能在相符的帳號工作區還原。舊 `local-backup-v1` 仍可還原，以支援既有備份遷移。
 - 尚未發現並驗證可安全呼叫的官方排名戰歷史查詢通道。因此登入功能只確認帳號、建立本機工作區，不會宣稱已載入遠端 PVP 歷史；歷史資料仍由守衛 JSON 或手動建立提供。
 - 官方登入成功後可確認連線端點與 player channel 的存在；然而本次沒有以使用者認證資料發送或重放 WebSocket join／握手封包，也沒有把其參數形狀視為已驗證契約。因此本專案不實作 WebSocket 歷史查詢，並將遠端歷史載入保留為未驗證範圍。
+
+## 2026-08-25 medals-only 擷取界線
+
+- 使用者提供的實際開發者工具畫面顯示，登入後的 `player:<user_id>` Phoenix channel `phx_reply` 會在 `response` 內提供 `medals` 陣列，且同一回覆也可能含有排名、積分、聯盟等其他欄位。
+- 分析站僅在本次官方登入成功、`user_token` 仍存在於記憶體時，加入對應 `player:<user_id>` channel 並發出唯一的 `medals` 事件。程式只從成功回覆擷取 `response.medals`，不保存同一回覆的排名、積分、聯盟或其他 player 欄位；取得完成後會關閉連線。
+- Token 仍不會寫入 IndexedDB、localStorage、可攜備份或程式碼。重新載入、登出或切換既有工作區均會清除記憶體 token，因此使用者必須重新登入才能重新取得 medals。
+- 本輪只以測試訊框模擬驗證連線序列與資料最小化，沒有使用任何真實帳號、密碼或 token 測試遠端 WebSocket；若 Cloudflare、CORS 或網路限制阻斷連線，介面會保留已確認的本機工作區並顯示連線未完成，而不會把它誤判為帳密錯誤。

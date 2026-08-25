@@ -2,7 +2,7 @@ import type { TeamMember } from "@/components/PvpUi";
 
 export type PvpOutcome = "win" | "loss" | "draw" | "unknown";
 export type PvpMode = "1v1" | "3v3";
-export type LocalProfile = { id: string; externalUserId?: string; kind: "official" | "demo"; createdAt: number; lastVerifiedAt?: number };
+export type LocalProfile = { id: string; externalUserId?: string; kind: "official" | "demo"; createdAt: number; lastVerifiedAt?: number; medalsSnapshot?: { capturedAt: number; count: number; items: unknown[] } };
 export type LocalPvpMatch = { id: number; profileId?: string; battleAt: number; mode: PvpMode; outcome: PvpOutcome; playerTeam: TeamMember[]; opponentTeam: TeamMember[]; opponentName?: string; rankBefore?: number; rankAfter?: number; scoreBefore?: number; scoreAfter?: number; notes?: string; sourceBattleChannel?: string; sourceBattleId?: string; rawPayload?: unknown; unrecognizedFields?: Record<string, unknown>; createdAt: number; updatedAt: number };
 export type LocalImportBatch = { id: number; profileId?: string; receivedAt: number; label: string; recognizedCount: number; rejectedCount: number; warnings: string[] };
 export type MatchInput = Omit<LocalPvpMatch, "id" | "createdAt" | "updatedAt" | "profileId"> & { profileId?: string };
