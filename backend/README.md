@@ -87,14 +87,14 @@ Pages workflow 會讀取 repository variable `PVP_BACKEND_ORIGIN`，並在 `pnpm
 
 ## mod 設定
 
-在載入 `pvp_double_match_guard.js` 前，於你自己的本機 mod 設定加入：
+請將 `mods/TOOLS/rf_pvp_backend_config.js` 放在 loader 同層的 `TOOLS/` 資料夾，並只在該檔案設定 endpoint 與 API key：
 
 ```js
 window.RF_PVP_BACKEND_ENDPOINT = "https://rf-pvp-analyzer-api.<你的-subdomain>.workers.dev/api/pvp/capture";
 window.RF_PVP_API_KEY = "只放在你自己的瀏覽器 mod 設定";
 ```
 
-再載入 `pvp_double_match_guard.js`。守衛只有在官方 `player medals` 結果證據存在、5v5 聚合完成且來源鍵尚未傳送時才 POST。health heartbeat 只呼叫 `/api/pvp/health`，不傳送遊戲資料；連線失敗時會退避重連且不阻塞遊戲。完整載入順序與本機 bridge fallback 請參閱 [`../bridge/README.md`](../bridge/README.md)。
+`rf_mod_loader.js` 會先載入 `./mods/TOOLS/rf_pvp_backend_config.js`，再載入 `pvp_double_match_guard.js`，不需要修改 loader。守衛只有在官方 `player medals` 結果證據存在、5v5 聚合完成且來源鍵尚未傳送時才 POST。health heartbeat 只呼叫 `/api/pvp/health`，不傳送遊戲資料；連線失敗時會退避重連且不阻塞遊戲。完整載入順序與本機 bridge fallback 請參閱 [`../bridge/README.md`](../bridge/README.md)。
 
 ## 安全與限制
 

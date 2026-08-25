@@ -69,16 +69,28 @@ Bridge 不會把事件轉送到官方伺服器，也不會取代官方登入與 
 
 ## Modified mod bundle
 
-The ready-to-copy files are in `bridge/mods/`. The panel loader now loads only `pvp_double_match_guard.js`; its browser-side bridge client is embedded inside that file, so `rf_bridge_client.js` is no longer required. The no-panel loader remains unchanged because it does not install the passive WebSocket tap or load the PVP guard. `rf-bridge.mjs` is intentionally kept as a separate Node process because it binds the localhost port and cannot run inside a browser mod.
+The ready-to-copy files are in `bridge/mods/`. The panel loader keeps its tool list in `rf_mod_loader.js`; the PVP backend settings are a separate file at `bridge/mods/TOOLS/rf_pvp_backend_config.js` and are loaded before `pvp_double_match_guard.js`. The browser-side bridge client is embedded inside the guard, so `rf_bridge_client.js` is no longer required. `rf-bridge.mjs` is intentionally kept as a separate Node process because it binds the localhost port and cannot run inside a browser mod.
 
 ## 直接後端模式：自建 Cloudflare Worker
 
-合併後的 `pvp_double_match_guard.js` 不含任何 Manus 或其他受管服務的預設網址。若要直接同步到遠端，請先自行部署 `backend/` 的 Cloudflare Worker + D1，然後在載入守衛前設定自己的 endpoint 與 API key：
+合併後的 `pvp_double_match_guard.js` 不含任何 Manus 或其他受管服務的預設網址。若要直接同步到遠端，請先自行部署 `backend/` 的 Cloudflare Worker + D1，並將以下檔案結構放到遊戲 mod 目錄：
+
+```text
+mods/
+  rf_mod_loader.js
+  pvp_double_match_guard.js
+  TOOLS/
+    rf_pvp_backend_config.js
+```
+
+只需要在 `TOOLS/rf_pvp_backend_config.js` 設定自己的 endpoint 與 API key，不要修改 loader：
 
 ```js
 window.RF_PVP_BACKEND_ENDPOINT = "https://rf-pvp-analyzer-api.<你的-subdomain>.workers.dev/api/pvp/capture";
 window.RF_PVP_API_KEY = "只保存於你自己的本機 mod 設定";
 ```
+
+`rf_mod_loader.js` 會先載入 `./mods/TOOLS/rf_pvp_backend_config.js`，再載入 `./mods/pvp_double_match_guard.js`。
 
 摘要包含 `workspaceId`、模式、勝負、雙方最多五名成員、排名／分數變化及去重來源鍵；不包含密碼、user token、cookie、raw WebSocket frame 或完整原始事件。Worker 提供 `GET /api/pvp/health`、`POST /api/pvp/capture` 與 `GET /api/pvp/events?workspaceId=...&after=...`，資料由 D1 持久化。完整 Cloudflare 與 GitHub Actions 設定請參閱 [`../backend/README.md`](../backend/README.md)。
 

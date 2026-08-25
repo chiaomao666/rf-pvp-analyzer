@@ -212,3 +212,5 @@
 - [x] 補上公開 Remote Backend 模式與部署啟動契約回歸驗證；已通過 46 項 Vitest、TypeScript 與正式 Vite build。
 - [x] 核對最新 remote backend 修正是否已提交並推送到使用者的 GitHub repository：commit `c5d08a0` 已推送至 `github/main`。
 - [x] 確認 GitHub Pages workflow 重新建置並公開最新 bundle：Pages 與 Worker workflow 均成功完成；公開 bundle 已包含 Worker origin 與舊 local 模式遷移邏輯。
+- [x] 將 `rf_pvp_backend_config.js` 改放到 `TOOLS` 資料夾，並由 loader 以相對路徑 `./mods/TOOLS/rf_pvp_backend_config.js` 載入。
+- [x] 更新 mod 契約測試、README 與交付檔案結構，確認不需把設定寫死在 loader；已通過 47 項 Vitest、TypeScript 與 3 個 mod Node 語法檢查。
