@@ -216,3 +216,5 @@
 - [x] 更新 mod 契約測試、README 與交付檔案結構，確認不需把設定寫死在 loader；已通過 47 項 Vitest、TypeScript 與 3 個 mod Node 語法檢查。
 - [x] 移除網站 JSON 匯入／匯出按鈕、頁面入口與相關操作 UI；已清理首頁、帳號頁、歷史頁與新增紀錄頁。
 - [x] 移除不再使用的 JSON 匯入／匯出頁、拆批上傳模組與專用測試，保留 Worker/D1 同步、事件 parser 及既有 IndexedDB 戰績；已通過 41 項 Vitest、正式建置與殘留引用搜尋。
+- [ ] 將已完成的 JSON 匯入／匯出移除變更提交並推送到 `chiaomao666/rf-pvp-analyzer`。
+- [ ] 確認 GitHub Pages workflow 成功完成，並驗證公開網站已更新至無 JSON 入口版本。
