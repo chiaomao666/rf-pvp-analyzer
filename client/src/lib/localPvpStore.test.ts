@@ -42,6 +42,20 @@ describe("parsePvpJson", () => {
 });
 
 describe("帳號工作區隔離與備份", () => {
+  it("保存 5v5 手動紀錄時保留雙方各五名角色，且既有 1v1 紀錄可共存", async () => {
+    const profile = await officialProfile("505");
+    setActiveProfileId(profile.id);
+    const makeFive = (prefix: string) => Array.from({ length: 5 }, (_, index) => ({ name: `${prefix}-${index + 1}`, level: 80 + index, power: 1000 + index }));
+    await saveMatch({ battleAt: 1787603139254, mode: "5v5", outcome: "win", playerTeam: makeFive("我方"), opponentTeam: makeFive("對方") });
+    await saveMatch(fixtureRecord("legacy-1v1"));
+    const matches = await listMatches();
+    const fiveVsFive = matches.find(match => match.mode === "5v5");
+    expect(fiveVsFive).toMatchObject({ profileId: profile.id, mode: "5v5" });
+    expect(fiveVsFive?.playerTeam).toHaveLength(5);
+    expect(fiveVsFive?.opponentTeam).toHaveLength(5);
+    expect(matches.some(match => match.mode === "1v1")).toBe(true);
+  });
+
   it("讓相同官方來源鍵在不同帳號工作區各自建立，且無法跨帳號讀取", async () => {
     const profileA = await officialProfile("101"); const profileB = await officialProfile("202");
     setActiveProfileId(profileA.id);

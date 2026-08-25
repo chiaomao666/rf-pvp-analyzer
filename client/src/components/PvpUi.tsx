@@ -18,7 +18,7 @@ export function OutcomeBadge({ outcome }: { outcome: "win" | "loss" | "draw" | "
   return <span className={cn("outcome-badge", `outcome-${outcome}`)}>{labels[outcome]}</span>;
 }
 
-export function ModeBadge({ mode }: { mode: "1v1" | "3v3" }) {
+export function ModeBadge({ mode }: { mode: "1v1" | "3v3" | "5v5" }) {
   return <span className="mode-badge"><Swords size={12} strokeWidth={1.8} /> {mode}</span>;
 }
 
