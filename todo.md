@@ -151,7 +151,12 @@
 - [x] 新增 bridge client、mod 接線範例、Windows／GitHub Pages 使用文件與 curl 健康檢查說明。
 - [x] 補上 bridge client、5v5 解析與 bridge 去重的 Vitest 回歸測試，並通過 TypeScript 檢查與正式建置。
 
-- [ ] 盤點目前 mod 是否已實際呼叫 Localhost Bridge client，確認遊戲資料到 bridge 的接線缺口。
-- [ ] 以最小白名單方式補上必要的 mod bridge 轉送接線，禁止傳送密碼、user_token、完整 raw frame 或非必要欄位。
+- [x] 盤點目前 mod 是否已實際呼叫 Localhost Bridge client，確認遊戲資料到 bridge 的接線缺口。
+- [x] 以最小白名單方式補上必要的 mod bridge 轉送接線，禁止傳送密碼、user_token、完整 raw frame 或非必要欄位。
 - [x] 修復 checkpoint 暴露的部署輸出路徑不一致問題，讓正式建置產物符合部署服務預期。
 - [x] 補上 mod 接線與部署輸出路徑回歸測試，重新驗證網站建置及 bridge smoke test。
+
+- [x] 盤點使用者提供的 mod 載入器與 PVP 守衛，確認實際事件聚合與載入順序。
+- [x] 以最小白名單摘要把 PVP 結果安全轉送至 Localhost Bridge，禁止傳送憑證、token 與完整原始訊框。
+- [x] 為實際 mod bridge 接線補上去敏、去重與失敗不阻塞遊戲的測試。
+- [x] 修復受管部署使用 Node 啟動時缺少 dist/index.js 的啟動契約，並重新驗證部署建置。

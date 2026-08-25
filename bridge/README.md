@@ -64,3 +64,7 @@ window.RFLocalBridge?.sendMatch({
 | `QUEUE` 不下降 | 網站沒有選取工作區，或事件摘要不符合白名單 | 先選取工作區；查看終端機回傳的拒絕原因 |
 
 Bridge 不會把事件轉送到官方伺服器，也不會取代官方登入與 medals-only 查詢。使用前請確認遊戲服務條款、官方授權範圍與你安裝的 mod 行為均允許這種本機資料整理方式。
+
+## Modified mod bundle
+
+The ready-to-copy loader and PVP bridge files are in `bridge/mods/`. The panel loader must load `rf_bridge_client.js` before `pvp_double_match_guard.js`. The no-panel loader is not patched because it does not install the passive WebSocket tap or load the PVP guard.
