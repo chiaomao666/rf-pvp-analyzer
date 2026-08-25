@@ -13,6 +13,8 @@ export type LocalPvpMatch = {
   opponentName?: string;
   rankBefore?: number;
   rankAfter?: number;
+  scoreBefore?: number;
+  scoreAfter?: number;
   notes?: string;
   sourceBattleChannel?: string;
   sourceBattleId?: string;
@@ -72,6 +74,7 @@ function asObject(value: unknown): Record<string, unknown> | null { return value
 function first(record: Record<string, unknown>, keys: string[]) { return keys.map(key => record[key]).find(value => value !== undefined && value !== null); }
 function timestamp(value: unknown) { if (typeof value === "number" && Number.isFinite(value)) return value > 10_000_000_000 ? Math.trunc(value) : Math.trunc(value * 1000); if (typeof value === "string") { const parsed = Date.parse(value); return Number.isNaN(parsed) ? null : parsed; } return null; }
 function positiveInteger(value: unknown) { const numeric = typeof value === "number" ? value : Number(value); return Number.isInteger(numeric) && numeric > 0 ? numeric : undefined; }
+function scoreValue(value: unknown) { const numeric = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : Number.NaN; return Number.isFinite(numeric) && numeric >= 0 ? numeric : undefined; }
 function sourceId(value: unknown) { return typeof value === "string" && value.trim() ? value.trim() : typeof value === "number" && Number.isFinite(value) ? String(Math.trunc(value)) : undefined; }
 function outcome(value: unknown): PvpOutcome { const text = String(value ?? "").toLowerCase(); if (["win", "won", "victory", "勝", "勝利", "true"].includes(text)) return "win"; if (["loss", "lose", "lost", "defeat", "敗", "失敗", "false"].includes(text)) return "loss"; return ["draw", "tie", "平手"].includes(text) ? "draw" : "unknown"; }
 function team(value: unknown): TeamMember[] {
@@ -90,6 +93,20 @@ function team(value: unknown): TeamMember[] {
 
 function candidates(root: unknown): unknown[] { if (Array.isArray(root)) return root; const object = asObject(root); if (!object) return []; for (const key of ["matches", "records", "data", "logs"]) if (Array.isArray(object[key])) return object[key] as unknown[]; return [root]; }
 
+function recoverLegacyScores(record: LocalPvpMatch): LocalPvpMatch {
+  const sources = [record as unknown as Record<string, unknown>, asObject(record.unrecognizedFields), asObject(record.rawPayload)].filter((value): value is Record<string, unknown> => value !== null);
+  const findScore = (keys: string[]) => {
+    for (const source of sources) {
+      const value = scoreValue(first(source, keys));
+      if (value !== undefined) return value;
+    }
+    return undefined;
+  };
+  const scoreBefore = record.scoreBefore ?? findScore(["scoreBefore", "score_before", "preScore", "pre_score", "beforeScore", "before_score"]);
+  const scoreAfter = record.scoreAfter ?? findScore(["scoreAfter", "score_after", "postScore", "post_score", "afterScore", "after_score"]);
+  return { ...record, ...(scoreBefore !== undefined ? { scoreBefore } : {}), ...(scoreAfter !== undefined ? { scoreAfter } : {}) };
+}
+
 export function parsePvpJson(dataText: string): { records: MatchInput[]; rejectedCount: number; warnings: string[] } {
   let root: unknown;
   try { root = JSON.parse(dataText); } catch { throw new Error("JSON 格式無法解析；請確認匯出內容完整且未被截斷。 "); }
@@ -103,14 +120,16 @@ export function parsePvpJson(dataText: string): { records: MatchInput[]; rejecte
     const rawMode = String(first(record, ["mode", "battleMode", "battle_mode", "type"]) ?? "").toLowerCase().replaceAll(" ", "");
     const mode: PvpMode | null = rawMode.includes("1v1") || rawMode === "1" || playerTeam.length === 1 ? "1v1" : rawMode.includes("3v3") || rawMode === "3" || playerTeam.length === 3 ? "3v3" : null;
     if (!battleAt || !mode || !playerTeam.length || !opponentTeam.length || playerTeam.length > 20 || opponentTeam.length > 20) { rejectedCount += 1; continue; }
-    records.push({ battleAt, mode, outcome: outcome(first(record, ["outcome", "result", "winner", "status"])), playerTeam, opponentTeam, ...(typeof first(record, ["opponentName", "opponent_name"]) === "string" ? { opponentName: String(first(record, ["opponentName", "opponent_name"])) } : {}), ...(positiveInteger(first(record, ["rankBefore", "rank_before", "preRank", "pre_rank"])) ? { rankBefore: positiveInteger(first(record, ["rankBefore", "rank_before", "preRank", "pre_rank"])) } : {}), ...(positiveInteger(first(record, ["rankAfter", "rank_after", "postRank", "post_rank"])) ? { rankAfter: positiveInteger(first(record, ["rankAfter", "rank_after", "postRank", "post_rank"])) } : {}), ...(sourceId(first(record, ["sourceBattleChannel", "source_battle_channel"])) ? { sourceBattleChannel: sourceId(first(record, ["sourceBattleChannel", "source_battle_channel"])) } : {}), ...(sourceId(first(record, ["sourceBattleId", "source_battle_id"])) ? { sourceBattleId: sourceId(first(record, ["sourceBattleId", "source_battle_id"])) } : {}), rawPayload: record });
+    const scoreBefore = scoreValue(first(record, ["scoreBefore", "score_before", "preScore", "pre_score", "beforeScore", "before_score"]));
+    const scoreAfter = scoreValue(first(record, ["scoreAfter", "score_after", "postScore", "post_score", "afterScore", "after_score"]));
+    records.push({ battleAt, mode, outcome: outcome(first(record, ["outcome", "result", "winner", "status"])), playerTeam, opponentTeam, ...(typeof first(record, ["opponentName", "opponent_name"]) === "string" ? { opponentName: String(first(record, ["opponentName", "opponent_name"])) } : {}), ...(positiveInteger(first(record, ["rankBefore", "rank_before", "preRank", "pre_rank"])) ? { rankBefore: positiveInteger(first(record, ["rankBefore", "rank_before", "preRank", "pre_rank"])) } : {}), ...(positiveInteger(first(record, ["rankAfter", "rank_after", "postRank", "post_rank"])) ? { rankAfter: positiveInteger(first(record, ["rankAfter", "rank_after", "postRank", "post_rank"])) } : {}), ...(scoreBefore !== undefined ? { scoreBefore } : {}), ...(scoreAfter !== undefined ? { scoreAfter } : {}), ...(sourceId(first(record, ["sourceBattleChannel", "source_battle_channel"])) ? { sourceBattleChannel: sourceId(first(record, ["sourceBattleChannel", "source_battle_channel"])) } : {}), ...(sourceId(first(record, ["sourceBattleId", "source_battle_id"])) ? { sourceBattleId: sourceId(first(record, ["sourceBattleId", "source_battle_id"])) } : {}), rawPayload: record });
   }
   if (rejectedCount) warnings.push(`${rejectedCount} 筆資料缺少可辨識的時間、模式或非空雙方隊伍，未建立戰績。`);
   return { records, rejectedCount, warnings };
 }
 
-export async function listMatches(filters: MatchFilters = {}) { const entries = await withStore<LocalPvpMatch[]>(MATCHES, "readonly", store => store.getAll()); return entries.filter(match => (!filters.mode || match.mode === filters.mode) && (!filters.outcome || match.outcome === filters.outcome) && (!filters.startAt || match.battleAt >= filters.startAt) && (!filters.endAt || match.battleAt <= filters.endAt)).sort((a, b) => b.battleAt - a.battleAt); }
-export async function getMatch(id: number) { return withStore<LocalPvpMatch | undefined>(MATCHES, "readonly", store => store.get(id)); }
+export async function listMatches(filters: MatchFilters = {}) { const entries = (await withStore<LocalPvpMatch[]>(MATCHES, "readonly", store => store.getAll())).map(recoverLegacyScores); return entries.filter(match => (!filters.mode || match.mode === filters.mode) && (!filters.outcome || match.outcome === filters.outcome) && (!filters.startAt || match.battleAt >= filters.startAt) && (!filters.endAt || match.battleAt <= filters.endAt)).sort((a, b) => b.battleAt - a.battleAt); }
+export async function getMatch(id: number) { const match = await withStore<LocalPvpMatch | undefined>(MATCHES, "readonly", store => store.get(id)); return match ? recoverLegacyScores(match) : undefined; }
 export async function saveMatch(input: MatchInput) { const now = Date.now(); const id = await withStore<IDBValidKey>(MATCHES, "readwrite", store => store.add({ ...input, createdAt: now, updatedAt: now })); notifyStoreChange(); return Number(id); }
 export async function deleteMatch(id: number) { await withStore(MATCHES, "readwrite", store => store.delete(id)); notifyStoreChange(); }
 export async function listImports() { const entries = await withStore<LocalImportBatch[]>(IMPORTS, "readonly", store => store.getAll()); return entries.sort((a, b) => b.receivedAt - a.receivedAt); }
@@ -139,4 +158,4 @@ export async function restoreLocalBackup(dataText: string, replace = false): Pro
   notifyStoreChange(); return { restored, skipped };
 }
 export async function clearLocalData() { const db = await openDatabase(); const transaction = db.transaction([MATCHES, IMPORTS], "readwrite"); transaction.objectStore(MATCHES).clear(); transaction.objectStore(IMPORTS).clear(); await new Promise<void>((resolve, reject) => { transaction.oncomplete = () => resolve(); transaction.onerror = () => reject(transaction.error); }); db.close(); notifyStoreChange(); }
-export async function dashboard() { const records = await listMatches(); const wins = records.filter(item => item.outcome === "win").length; const losses = records.filter(item => item.outcome === "loss").length; const decided = wins + losses; const ordered = [...records].sort((a, b) => a.battleAt - b.battleAt); const ranked = ordered.filter(item => item.rankAfter); return { total: records.length, wins, losses, winRate: decided ? Math.round((wins / decided) * 1000) / 10 : null, currentRank: ranked.at(-1)?.rankAfter ?? null, rankSeries: ranked.map(item => ({ battleAt: item.battleAt, rank: item.rankAfter! })), recent: records.slice(0, 6) }; }
+export async function dashboard() { const records = await listMatches(); const wins = records.filter(item => item.outcome === "win").length; const losses = records.filter(item => item.outcome === "loss").length; const decided = wins + losses; const ordered = [...records].sort((a, b) => a.battleAt - b.battleAt); const ranked = ordered.filter(item => item.rankAfter); const scored = ordered.filter(item => item.scoreAfter !== undefined); return { total: records.length, wins, losses, winRate: decided ? Math.round((wins / decided) * 1000) / 10 : null, currentRank: ranked.at(-1)?.rankAfter ?? null, currentScore: scored.at(-1)?.scoreAfter ?? null, rankSeries: ranked.map(item => ({ battleAt: item.battleAt, rank: item.rankAfter! })), scoreSeries: scored.map(item => ({ battleAt: item.battleAt, score: item.scoreAfter! })), recent: records.slice(0, 6) }; }

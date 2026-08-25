@@ -29,6 +29,13 @@ export function RankDelta({ before, after }: { before: number | null | undefined
   return <span className={cn("rank-delta", delta > 0 ? "improved" : delta < 0 ? "declined" : "muted")}>{label}</span>;
 }
 
+export function ScoreDelta({ before, after }: { before: number | null | undefined; after: number | null | undefined }) {
+  if (before === undefined || before === null || after === undefined || after === null) return <span className="score-delta muted">—</span>;
+  const delta = after - before;
+  const label = delta === 0 ? "持平" : delta > 0 ? `＋${delta.toLocaleString()}` : `−${Math.abs(delta).toLocaleString()}`;
+  return <span className={cn("score-delta", delta > 0 ? "improved" : delta < 0 ? "declined" : "muted")}>{label}</span>;
+}
+
 export function TeamStrip({ members, tone = "player" }: { members: TeamMember[]; tone?: "player" | "opponent" }) {
   return (
     <div className={cn("team-strip", `team-${tone}`)}>
