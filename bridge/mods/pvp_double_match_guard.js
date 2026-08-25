@@ -2,7 +2,8 @@
   "use strict";
 
   // 瀏覽器側 bridge client 內嵌於本守衛；Node localhost server 仍維持獨立檔案。
-  const BRIDGE_ENDPOINT = "http://127.0.0.1:8787/v1/capture";
+  const BRIDGE_ENDPOINT = window.RF_PVP_BACKEND_ENDPOINT || "https://rfpvpanlyz-wgxynphd.manus.space/api/pvp/capture";
+  const LOCAL_BRIDGE_ENDPOINT = "http://127.0.0.1:8787/v1/capture";
   const BRIDGE_ALLOWED_KEYS = [
     "battleAt", "mode", "outcome", "playerTeam", "opponentTeam", "opponentName",
     "rankBefore", "rankAfter", "scoreBefore", "scoreAfter", "notes",
@@ -20,17 +21,20 @@
       );
     };
     const sendMatch = async (summary) => {
-      const response = await fetch(BRIDGE_ENDPOINT, {
+      const endpoint = window.RF_PVP_BACKEND_ENDPOINT || BRIDGE_ENDPOINT;
+      const requestBody = { type: "match", workspaceId: summary.workspaceId, data: sanitize(summary) };
+      if (!window.RF_PVP_BACKEND_ENDPOINT && endpoint === LOCAL_BRIDGE_ENDPOINT) delete requestBody.workspaceId;
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "match", data: sanitize(summary) }),
+        body: JSON.stringify(requestBody),
       });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok || !payload.accepted) throw new Error(payload.error || `bridge HTTP ${response.status}`);
-      return payload;
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.accepted) throw new Error(result.error || `bridge HTTP ${response.status}`);
+      return result;
     };
     window.RFLocalBridge = Object.freeze({ sendMatch, endpoint: BRIDGE_ENDPOINT });
-    console.log("[RF bridge] embedded client ready; loopback only");
+    console.log(`[RF bridge] embedded client ready; endpoint=${BRIDGE_ENDPOINT}`);
   }
 
   installEmbeddedBridgeClient();
@@ -595,6 +599,7 @@
       outcome: ["win", "loss", "draw", "unknown"].includes(record.outcome) ? record.outcome : "unknown",
       playerTeam: safeBridgeTeam(record.playerTeam),
       opponentTeam: safeBridgeTeam(record.opponentTeam),
+      workspaceId: String(record.sourcePlayerUserId || "").slice(0, 80),
       ...(typeof record.opponentName === "string" ? { opponentName: record.opponentName } : {}),
       ...(Number.isInteger(record.rankBefore) && record.rankBefore >= 0 ? { rankBefore: record.rankBefore } : {}),
       ...(Number.isInteger(record.rankAfter) && record.rankAfter >= 0 ? { rankAfter: record.rankAfter } : {}),
@@ -616,10 +621,10 @@
       if (!summary.playerTeam.length || !summary.opponentTeam.length) continue;
       bridgeSentKeys.add(key);
       Promise.resolve(sendMatch(summary)).then((result) => {
-        console.log(`[${MOD_NAME}] 已轉送完整戰績至 localhost bridge：`, result);
+        console.log(`[${MOD_NAME}] 已轉送完整戰績至後端：`, result);
       }).catch((error) => {
         bridgeSentKeys.delete(key);
-        console.warn(`[${MOD_NAME}] localhost bridge 未接收，保留本機匯出：`, error?.message || error);
+        console.warn(`[${MOD_NAME}] 後端未接收，保留本機匯出：`, error?.message || error);
       });
     }
   }

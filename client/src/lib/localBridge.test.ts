@@ -24,3 +24,39 @@ describe("local bridge client", () => {
     await expect(checkLocalBridge()).rejects.toThrow("bridge health HTTP 503");
   });
 });
+
+it("uses the remote backend health endpoint when remote mode is selected", async () => {
+  const localStorage = new Map<string, string>();
+  vi.stubGlobal("window", {
+    localStorage: {
+      getItem: (key: string) => localStorage.get(key) ?? null,
+      setItem: (key: string, value: string) => localStorage.set(key, value),
+    },
+    dispatchEvent: vi.fn(),
+  });
+  localStorage.set("rf-pvp-bridge-mode", "remote");
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true, queueSize: 2, latestEventId: 8 }), { status: 200 }));
+  vi.stubGlobal("fetch", fetchMock);
+
+  await expect(checkLocalBridge()).resolves.toMatchObject({ ok: true, latestEventId: 8 });
+  expect(String(fetchMock.mock.calls[0]?.[0])).toBe("https://rfpvpanlyz-wgxynphd.manus.space/api/pvp/health");
+});
+
+it("polls the remote backend by the active bare official workspace id", async () => {
+  const localStorage = new Map<string, string>([
+    ["rf-pvp-bridge-mode", "remote"],
+    ["rf-pvp-active-profile-id", "official:832459"],
+  ]);
+  vi.stubGlobal("window", {
+    localStorage: {
+      getItem: (key: string) => localStorage.get(key) ?? null,
+      setItem: (key: string, value: string) => localStorage.set(key, value),
+    },
+    dispatchEvent: vi.fn(),
+  });
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ events: [], latestEventId: 12, queueSize: 1 }), { status: 200 }));
+  vi.stubGlobal("fetch", fetchMock);
+
+  await pollLocalBridge(9);
+  expect(String(fetchMock.mock.calls[0]?.[0])).toBe("https://rfpvpanlyz-wgxynphd.manus.space/api/pvp/events?workspaceId=832459&after=9");
+});

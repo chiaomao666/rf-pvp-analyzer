@@ -168,3 +168,9 @@
 
 - [x] 修正 START_BRIDGE_WINDOWS.bat 從任意工作目錄啟動時找不到 package.json 的問題。
 - [x] 補充 bridge Windows 啟動檔的專案位置與錯誤提示，並驗證檔案內容與正式建置不受影響。
+
+- [x] 評估純前端 GitHub Pages 與受管後端部署是否能共存，確認不破壞既有 IndexedDB 模式。
+- [x] 設計後端 PVP 摘要接收 API 的驗證、來源去重、資料隔離與 CORS 邊界。
+- [x] 實作可選後端接收流程，讓 mod 能直接 POST 最小 5v5 結果摘要。
+- [x] 加入前端後端模式設定與錯誤狀態，並保留本機 bridge 作為離線方案。
+- [x] 補上後端 API、mod、資料隔離與部署契約測試。

@@ -11,7 +11,9 @@ describe("approved PVP mod bridge contract", () => {
     expect(loader).not.toContain("全局記憶體優化器");
     expect(loader).toContain('src: "./mods/pvp_double_match_guard.js"');
     expect(guard).toContain("installEmbeddedBridgeClient");
-    expect(guard).toContain('body: JSON.stringify({ type: "match", data: sanitize(summary) })');
+    expect(guard).toContain('body: JSON.stringify(requestBody)');
+    expect(guard).toContain('api/pvp/capture');
+    expect(guard).toContain('workspaceId: String(record.sourcePlayerUserId');
   });
 
   it("only forwards records after official player medals evidence", () => {

@@ -70,3 +70,11 @@ Bridge 不會把事件轉送到官方伺服器，也不會取代官方登入與 
 ## Modified mod bundle
 
 The ready-to-copy files are in `bridge/mods/`. The panel loader now loads only `pvp_double_match_guard.js`; its browser-side bridge client is embedded inside that file, so `rf_bridge_client.js` is no longer required. The no-panel loader remains unchanged because it does not install the passive WebSocket tap or load the PVP guard. `rf-bridge.mjs` is intentionally kept as a separate Node process because it binds the localhost port and cannot run inside a browser mod.
+
+## 直接後端模式（試作）
+
+目前合併後的 `pvp_double_match_guard.js` 預設會把已由官方 `player medals` 確認的最小戰績摘要送到受管網站的 `/api/pvp/capture`。摘要包含 `workspaceId`、模式、勝負、雙方最多五名成員、排名／分數變化及去重來源鍵；不包含密碼、user token、raw WebSocket frame 或完整原始事件。
+
+後端提供 `GET /api/pvp/health`、`POST /api/pvp/capture` 與 `GET /api/pvp/events?workspaceId=...&after=...`。目前資料只保存在該 Node 程序的記憶體中，服務重啟或 autoscale instance 更換後會清空；這個版本只用來驗證 mod 能否直接連線。若要正式保存跨裝置戰績，下一步必須接入受控資料庫、認證與 workspace 擁有權驗證，不能把目前的公開 workspaceId 當成安全認證。
+
+若要改回本機模式，可在載入 mod 前設定 `window.RF_PVP_BACKEND_ENDPOINT` 為 localhost capture URL；未設定時使用受管後端試作端點。
