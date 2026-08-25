@@ -12,6 +12,7 @@ const LOCAL_BRIDGE_ORIGIN = "http://127.0.0.1:8787";
 function remoteBridgeOrigin() { return String(import.meta.env.VITE_PVP_BACKEND_ORIGIN || "").replace(/\/+$/, ""); }
 const ENABLED_KEY = "rf-pvp-bridge-enabled";
 const MODE_KEY = "rf-pvp-bridge-mode";
+const MODE_EXPLICIT_KEY = "rf-pvp-bridge-mode-explicit";
 const CURSOR_KEY = "rf-pvp-bridge-cursor";
 const REQUEST_TIMEOUT_MS = 1_200;
 
@@ -28,11 +29,20 @@ function request(url: string, init: RequestInit = {}) {
 export type BridgeMode = "local" | "remote";
 export function getBridgeMode(): BridgeMode {
   const saved = storage()?.getItem(MODE_KEY);
-  if (saved === "local" || saved === "remote") return saved;
+  if (saved === "local" || saved === "remote") {
+    // 舊版本可能已把 local 寫入 storage，但沒有記錄使用者曾明確選擇。
+    // Pages 有 Worker origin 時，這類舊值應遷移到 remote，避免永久輪詢 127.0.0.1。
+    if (saved === "local" && remoteBridgeOrigin() && storage()?.getItem(MODE_EXPLICIT_KEY) !== "true") return "remote";
+    return saved;
+  }
   // Pages 已注入 Worker origin 時，首次使用不能默認輪詢 127.0.0.1。
   return remoteBridgeOrigin() ? "remote" : "local";
 }
-export function setBridgeMode(mode: BridgeMode) { storage()?.setItem(MODE_KEY, mode); if (typeof window !== "undefined") window.dispatchEvent(new Event("rf-pvp-bridge-change")); }
+export function setBridgeMode(mode: BridgeMode) {
+  storage()?.setItem(MODE_KEY, mode);
+  storage()?.setItem(MODE_EXPLICIT_KEY, "true");
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("rf-pvp-bridge-change"));
+}
 export function bridgeOrigin(mode = getBridgeMode()) { return mode === "remote" ? remoteBridgeOrigin() : LOCAL_BRIDGE_ORIGIN; }
 export function isLocalBridgeEnabled() { return storage()?.getItem(ENABLED_KEY) === "true"; }
 export function setLocalBridgeEnabled(enabled: boolean) {

@@ -41,6 +41,15 @@ describe("local bridge client", () => {
     expect(getBridgeMode()).toBe("remote");
   });
 
+  it("migrates an old implicit local mode to remote, while preserving explicit local choice", () => {
+    vi.stubEnv("VITE_PVP_BACKEND_ORIGIN", "https://rf-pvp-api.example.workers.dev");
+    const localStorage = new Map<string, string>([["rf-pvp-bridge-mode", "local"]]);
+    vi.stubGlobal("window", { localStorage: { getItem: (key: string) => localStorage.get(key) ?? null, setItem: (key: string, value: string) => localStorage.set(key, value) }, dispatchEvent: vi.fn() });
+    expect(getBridgeMode()).toBe("remote");
+    localStorage.set("rf-pvp-bridge-mode-explicit", "true");
+    expect(getBridgeMode()).toBe("local");
+  });
+
   it("uses the configured remote backend health endpoint", async () => {
     vi.stubEnv("VITE_PVP_BACKEND_ORIGIN", "https://rf-pvp-api.example.workers.dev/");
     const localStorage = new Map<string, string>([["rf-pvp-bridge-mode", "remote"]]);
