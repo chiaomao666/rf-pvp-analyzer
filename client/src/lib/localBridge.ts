@@ -26,7 +26,12 @@ function request(url: string, init: RequestInit = {}) {
 }
 
 export type BridgeMode = "local" | "remote";
-export function getBridgeMode(): BridgeMode { return storage()?.getItem(MODE_KEY) === "remote" ? "remote" : "local"; }
+export function getBridgeMode(): BridgeMode {
+  const saved = storage()?.getItem(MODE_KEY);
+  if (saved === "local" || saved === "remote") return saved;
+  // Pages 已注入 Worker origin 時，首次使用不能默認輪詢 127.0.0.1。
+  return remoteBridgeOrigin() ? "remote" : "local";
+}
 export function setBridgeMode(mode: BridgeMode) { storage()?.setItem(MODE_KEY, mode); if (typeof window !== "undefined") window.dispatchEvent(new Event("rf-pvp-bridge-change")); }
 export function bridgeOrigin(mode = getBridgeMode()) { return mode === "remote" ? remoteBridgeOrigin() : LOCAL_BRIDGE_ORIGIN; }
 export function isLocalBridgeEnabled() { return storage()?.getItem(ENABLED_KEY) === "true"; }

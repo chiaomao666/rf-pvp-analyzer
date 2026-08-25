@@ -6,7 +6,7 @@
   "scripts": {
     "bridge": "node bridge/rf-bridge.mjs",
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/write-runtime-entry.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "start": "node server-static.mjs",
     "check": "tsc --noEmit",

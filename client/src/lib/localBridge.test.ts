@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { checkLocalBridge, localBridgeOrigin, pollLocalBridge } from "./localBridge";
+import { checkLocalBridge, getBridgeMode, localBridgeOrigin, pollLocalBridge } from "./localBridge";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -32,6 +32,13 @@ describe("local bridge client", () => {
   it("surfaces a bridge HTTP failure", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("down", { status: 503 })));
     await expect(checkLocalBridge()).rejects.toThrow("bridge health HTTP 503");
+  });
+
+  it("defaults to remote mode when a Worker origin is injected", () => {
+    vi.stubEnv("VITE_PVP_BACKEND_ORIGIN", "https://rf-pvp-api.example.workers.dev");
+    const localStorage = new Map<string, string>();
+    vi.stubGlobal("window", { localStorage: { getItem: (key: string) => localStorage.get(key) ?? null }, dispatchEvent: vi.fn() });
+    expect(getBridgeMode()).toBe("remote");
   });
 
   it("uses the configured remote backend health endpoint", async () => {

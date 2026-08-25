@@ -207,3 +207,6 @@
 - [x] 更新 mod contract 測試與文件，說明設定檔位置、endpoint、API key 與測試指令。
 - [x] 排查 mod 顯示已擷取但未送達分析網站的轉送、Worker 寫入與 workspace 查詢鏈路；確認 5v5 medals 辨識條件漏掉 5v5，且前端輪詢原先只在帳號頁執行。
 - [x] 補上 5v5 官方結果辨識回歸斷言與全站背景同步；已通過 45 項 Vitest、TypeScript、mod 語法檢查與正式 Vite build。
+- [x] 修正 GitHub Pages 公開頁面仍選用 local bridge、反覆呼叫 127.0.0.1 而未呼叫 Worker 的模式設定：有注入 Worker origin 且未保存模式時預設 remote，仍可明確切回 local。
+- [x] 修正受管部署啟動命令尋找 dist/index.js 但正式建置只產生 dist/public 的不一致：build 後產生 dist/index.js runtime entry。
+- [x] 補上公開 Remote Backend 模式與部署啟動契約回歸驗證；已通過 46 項 Vitest、TypeScript 與正式 Vite build。
