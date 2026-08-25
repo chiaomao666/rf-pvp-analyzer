@@ -1,12 +1,12 @@
 import { activateStoredWorkspace, createDemoWorkspace, getWorkspaceSession, loginOfficialAccount, logoutWorkspace, OfficialLoginError, refreshOfficialMedals, restoreStoredWorkspace } from "@/lib/accountWorkspace";
-import { BridgeMode, checkLocalBridge, getBridgeMode, getLocalBridgeCursor, isLocalBridgeEnabled, LocalBridgeStatus, pollLocalBridge, setBridgeMode, setLocalBridgeCursor, setLocalBridgeEnabled } from "@/lib/localBridge";
+import { BridgeMode, checkLocalBridge, getBridgeMode, getLocalBridgeCursor, isLocalBridgeEnabled, LocalBridgeStatus, pollLocalBridge, setBridgeMode, setBridgeSyncSnapshot, setLocalBridgeCursor, setLocalBridgeEnabled } from "@/lib/localBridge";
 import { countUnscopedData, getActiveProfileId, ingestBridgeMatch, listProfiles, LocalProfile, migrateUnscopedDataToProfile, parsePvpJson } from "@/lib/localPvpStore";
 import { CheckCircle2, ChevronDown, ChevronRight, Database, Eye, EyeOff, KeyRound, Link2, LogIn, LogOut, RefreshCw, Search, ShieldAlert, Wifi, WifiOff } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type Status = { tone: "success" | "error" | "info"; text: string } | null;
 
-function profileLabel(profile: LocalProfile) { return profile.kind === "demo" ? "示範模式工作區" : `遊戲帳號 #${profile.externalUserId ?? profile.id.replace("official:", "")}`; }
+function profileLabel(profile: LocalProfile) { return profile.kind === "demo" ? "示範模式工作區" : profile.playerName || "遊戲玩家工作區"; }
 function bridgeLabel(status: LocalBridgeStatus) { return status === "online" ? "BRIDGE ONLINE" : status === "checking" ? "CHECKING" : status === "disabled" ? "BRIDGE OFF" : "BRIDGE OFFLINE"; }
 
 export default function Account() {
@@ -46,8 +46,8 @@ export default function Account() {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const run = async () => {
       if (disposed) return;
-      if (!bridgeEnabled) { setBridgeStatus("disabled"); return; }
-      if (!session) { setBridgeStatus("offline"); setBridgeLastError("請先選取工作區，bridge 不會在未選取帳號時匯入資料。"); return; }
+      if (!bridgeEnabled) { setBridgeStatus("disabled"); setBridgeSyncSnapshot({ status: "disabled", error: undefined }); return; }
+      if (!session) { setBridgeStatus("offline"); setBridgeLastError("請先選取工作區，bridge 不會在未選取帳號時匯入資料。"); setBridgeSyncSnapshot({ status: "offline", error: "請先選取工作區" }); return; }
       try {
         setBridgeStatus("checking");
         const health = await checkLocalBridge();
@@ -64,7 +64,7 @@ export default function Account() {
         setLocalBridgeCursor(cursor); setBridgeQueue(result.queueSize); setBridgeStatus("online"); setBridgeLastError("");
         if (imported) { setBridgeImported(value => value + imported); await refresh(); }
       } catch (error) {
-        if (!disposed) { setBridgeStatus("offline"); setBridgeLastError(error instanceof Error ? error.message : "無法連線到本機 bridge。"); }
+        if (!disposed) { const message = error instanceof Error ? error.message : "無法連線到 bridge。"; setBridgeStatus("offline"); setBridgeLastError(message); setBridgeSyncSnapshot({ status: "offline", error: message }); }
       } finally { if (!disposed) timer = globalThis.setTimeout(run, 2_000); }
     };
     void run();

@@ -20,6 +20,8 @@ let memoryOnlyUserToken: string | null = null;
 function notify() { if (typeof window !== "undefined") window.dispatchEvent(new Event("rf-pvp-account-change")); }
 function asObject(value: unknown): Record<string, unknown> | null { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null; }
 function id(value: unknown) { return typeof value === "string" && value.trim() ? value.trim() : typeof value === "number" && Number.isFinite(value) ? String(Math.trunc(value)) : null; }
+function text(value: unknown) { return typeof value === "string" && value.trim() ? value.trim() : null; }
+function identity(data: Record<string, unknown> | null, keys: string[]) { for (const key of keys) { const value = text(data?.[key]); if (value) return value; } return null; }
 
 export function getWorkspaceSession() { return session; }
 export async function restoreStoredWorkspace(profileId: string | null) {
@@ -77,7 +79,7 @@ export async function loginOfficialAccount(account: string, password: string) {
   }
   const userId = result?.status === "ok" ? id(data?.user_id) : null;
   if (!userId) throw new OfficialLoginError("credentials", "遊戲伺服器未確認此帳號。請確認帳號與密碼，或稍後再試。 ");
-  const now = Date.now(); const profile: LocalProfile = { id: `official:${userId}`, externalUserId: userId, kind: "official", createdAt: (await getProfile(`official:${userId}`))?.createdAt ?? now, lastVerifiedAt: now };
+  const now = Date.now(); const previous = await getProfile(`official:${userId}`); const profile: LocalProfile = { id: `official:${userId}`, externalUserId: userId, kind: "official", createdAt: previous?.createdAt ?? now, lastVerifiedAt: now, ...(identity(data, ["player_name", "playerName", "name", "nickname", "display_name"]) ? { playerName: identity(data, ["player_name", "playerName", "name", "nickname", "display_name"])! } : previous?.playerName ? { playerName: previous.playerName } : {}), ...(identity(data, ["union_name", "unionName", "guild_name", "guildName", "organization_name"]) ? { unionName: identity(data, ["union_name", "unionName", "guild_name", "guildName", "organization_name"])! } : previous?.unionName ? { unionName: previous.unionName } : {}) };
   await upsertProfile(profile); setActiveProfileId(profile.id); memoryOnlyUserToken = typeof data?.user_token === "string" && data.user_token ? data.user_token : null; session = { profile, verifiedThisSession: true }; notify();
   return session;
 }

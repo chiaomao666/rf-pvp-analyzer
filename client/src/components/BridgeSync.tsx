@@ -1,4 +1,4 @@
-import { checkLocalBridge, getLocalBridgeCursor, isLocalBridgeEnabled, pollLocalBridge, setLocalBridgeCursor } from "@/lib/localBridge";
+import { checkLocalBridge, getLocalBridgeCursor, isLocalBridgeEnabled, pollLocalBridge, setBridgeSyncSnapshot, setLocalBridgeCursor } from "@/lib/localBridge";
 import { getActiveProfileId, ingestBridgeMatch, parsePvpJson } from "@/lib/localPvpStore";
 import { getWorkspaceSession, restoreStoredWorkspace } from "@/lib/accountWorkspace";
 import { useEffect } from "react";
@@ -41,7 +41,8 @@ export default function BridgeSync() {
         if (imported > 0 && typeof window !== "undefined") {
           window.dispatchEvent(new CustomEvent("rf-pvp-bridge-sync", { detail: { imported, latestEventId: result.latestEventId } }));
         }
-      } catch {
+      } catch (error) {
+        setBridgeSyncSnapshot({ status: "offline", error: error instanceof Error ? error.message : "同步失敗" });
         // 背景同步不可用時不阻塞分析站；帳號頁仍會顯示詳細錯誤。
       } finally {
         running = false;
