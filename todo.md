@@ -82,7 +82,7 @@
 - [x] 在純前端版本以瀏覽器實測一般 PVP JSON 匯入，確認匯入摘要、列表與統計更新正常。
 - [x] 以 `vite preview` 的正式靜態輸出驗證列表、統計、備份還原與刪除，不只驗證編譯成功。
 - [x] 補齊純前端的 `pnpm preview` 腳本，讓正式靜態輸出可於推送前被獨立驗證。
-- [ ] 將完成的純前端版本推送至 `chiaomao666/rf-pvp-analyzer`，並交付 GitHub Pages 啟用步驟。
+- [x] 將完成的純前端版本推送至 `chiaomao666/rf-pvp-analyzer`，並交付 GitHub Pages 啟用步驟。
 - [x] 修正 GitHub Pages workflow 在 setup-node 設定 pnpm 快取前尚未安裝 pnpm 的首次部署失敗。
 - [x] 從 GitHub 提交移除平台執行期專案設定，避免外洩不屬於靜態網站的連線或金鑰資訊。
 - [x] 重新盤點工作樹的敏感設定字串與移除項目，保存提交前的最終安全檢查結果。
@@ -99,4 +99,4 @@
 - [x] 讀回最終驗證紀錄，核對其中包含 localhost 與 preview 的首頁統計、列表筆數、詳情 id、匯入摘要與刪除後回復狀態。
 - [x] 釐清一般 JSON 匯入與完整本機備份還原的入口及保存範圍，避免完整備份的匯入歷程遺漏。
 - [x] 在實際 `pnpm preview` 4173 上以「還原本機備份」專用入口還原無敏感 `local-backup-v1` 測試檔，記錄還原、匯入歷程、統計、詳情與清理結果。
-- [ ] 由擁有儲存庫 Pages 管理權限的帳戶啟用 GitHub Pages 並設定部署來源為 GitHub Actions，再確認 workflow 成功與公開網址。
+- [x] 由擁有儲存庫 Pages 管理權限的帳戶啟用 GitHub Pages 並設定部署來源為 GitHub Actions，再確認 workflow 成功與公開網址。

@@ -66,3 +66,9 @@
 - 還原後首頁為累計 **1**、可判定勝率 **100%**、目前排名 **#699**、勝／敗 **1／0**，近期戰績連結為 `#/matches/5`。詳情頁可讀出 1v1 勝利、賽前 #700、賽後 #699、雙方測試隊伍與清理用備註，證實正式 preview 的還原、統計與單筆讀取均正常。
 - 詳情頁按「刪除紀錄」會先顯示頁內確認對話；選擇「取消」後仍停留在 `#/matches/5`，且完整測試紀錄、隊伍與備註仍可見。
 - 再次確認刪除後頁面回到空的戰績歷史；首頁回復為累計 **0**、勝率 **—**、目前排名 **—**、勝／敗 **0／0**。4173 preview 的測試 IndexedDB 已清理，不含使用者真實資料。
+
+## GitHub Pages 正式部署
+
+- 2026-08-25：儲存庫擁有者已在 GitHub Pages 設定中選擇 **GitHub Actions** 作為部署來源；本專案既有的 `deploy-pages.yml` 未新增 GitHub 提供的範例 workflow。
+- 最新手動觸發部署已成功完成：[GitHub Actions run 32830384243](https://github.com/chiaomao666/rf-pvp-analyzer/actions/runs/32830384243)。
+- GitHub Pages 已建立且強制 HTTPS：<https://chiaomao666.github.io/rf-pvp-analyzer/>。公開首頁實測可載入總覽、導覽與 Hash 路由入口；該網域是新的 origin，因此首頁顯示 0 筆本機資料，符合 IndexedDB 同源隔離設計。
