@@ -6,7 +6,6 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import Account from "@/pages/Account";
 import Home from "@/pages/Home";
-import Import from "@/pages/Import";
 import MatchDetail from "@/pages/MatchDetail";
 import Matches from "@/pages/Matches";
 import NotFound from "@/pages/NotFound";
@@ -20,7 +19,6 @@ function AppRoutes() {
     <Route path="/matches"><Shell><Matches /></Shell></Route>
     <Route path="/matches/:id">{params => <Shell><MatchDetail id={Number(params.id)} /></Shell>}</Route>
     <Route path="/record"><Shell><Record /></Shell></Route>
-    <Route path="/import"><Shell><Import /></Shell></Route>
     <Route path="/account"><Shell><Account /></Shell></Route>
     <Route path="/"><Shell><Home /></Shell></Route>
     <Route path="/404"><NotFound /></Route>

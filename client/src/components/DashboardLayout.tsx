@@ -8,7 +8,6 @@ const navigation = [
   { href: "/", label: "總覽", icon: LayoutDashboard },
   { href: "/matches", label: "戰績歷史", icon: Database },
   { href: "/record", label: "新增紀錄", icon: PlusSquare },
-  { href: "/import", label: "匯入資料", icon: Upload },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {

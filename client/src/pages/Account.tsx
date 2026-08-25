@@ -127,7 +127,7 @@ export default function Account() {
     setBusy(true); setStatus(null);
     try {
       const result = await migrateUnscopedDataToProfile(session.profile.id);
-      await refresh(); setStatus({ tone: "success", text: `已將既有未綁定資料轉移到 ${profileLabel(session.profile)}：${result.matches} 筆戰績、${result.imports} 筆匯入歷程。` });
+      await refresh(); setStatus({ tone: "success", text: `已將既有未綁定資料轉移到 ${profileLabel(session.profile)}：${result.matches} 筆戰績。` });
     } catch (error) { setStatus({ tone: "error", text: error instanceof Error ? error.message : "無法轉移既有資料。" }); }
     finally { setBusy(false); }
   };
@@ -137,7 +137,7 @@ export default function Account() {
   const renderProfiles = (title: string, items: LocalProfile[], open: boolean, setOpen: (value: boolean) => void) => items.length ? <div className="profile-group"><button type="button" className="profile-group-toggle" onClick={() => setOpen(!open)}><span>{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}{title}</span><small>{items.length}</small></button>{open && items.map(profile => <button className={session?.profile.id === profile.id ? "profile-select selected" : "profile-select"} key={profile.id} onClick={() => void onActivate(profile.id)} disabled={busy}><span>{profileLabel(profile)}</span><small>{profile.lastVerifiedAt ? "曾經登入確認" : "本機示範"}</small></button>)}</div> : null;
   return <div className="account-page">
     <section className="page-titlebar account-titlebar">
-      <div><p className="eyebrow">OFFICIAL ACCOUNT CHECK / MEDALS ONLY</p><h1>帳號工作區</h1><p>以官方回傳的帳號 ID 分隔本機戰績。登入後可從 player channel 唯讀取得 `medals`；排名戰歷史仍請透過守衛 JSON 或手動建立資料。</p></div>
+      <div><p className="eyebrow">OFFICIAL ACCOUNT CHECK / MEDALS ONLY</p><h1>帳號工作區</h1><p>以官方回傳的帳號 ID 分隔本機戰績。登入後可從 player channel 唯讀取得 `medals`；排名戰歷史會由 PVP 守衛自動同步，也可手動建立資料。</p></div>
       <div className="workspace-chip"><Database size={15} /><span>{session ? profileLabel(session.profile) : "尚未選取工作區"}</span></div>
     </section>
 
@@ -156,7 +156,7 @@ export default function Account() {
 
       <aside className="panel workspace-panel">
         <header><span><Database size={17} /></span><div><p className="eyebrow">CURRENT LOCAL SCOPE</p><h2>目前工作區</h2><p>工作區資料只保存在目前瀏覽器，與其他裝置或網站 origin 不共用。</p></div></header>
-        {session ? <div className="current-workspace"><b>{profileLabel(session.profile)}</b><small>{session.verifiedThisSession ? "本次已由官方登入流程確認" : "已選取的本機工作區；未於本次重新驗證"}</small><code>{session.profile.id}</code>{session.profile.medalsSnapshot && <div className="medals-snapshot"><b>MEDALS SNAPSHOT</b><span>{session.profile.medalsSnapshot.count} 枚 medals · {new Date(session.profile.medalsSnapshot.capturedAt).toLocaleString()}</span><small>本機只保留 player channel 回應中的 `medals` 陣列；不保留排名、積分或其他回應欄位。</small></div>}{session.verifiedThisSession && session.profile.kind === "official" && <button className="secondary-action medals-refresh" type="button" disabled={busy} onClick={() => void onRefreshMedals()}><RefreshCw size={14} />重新取得 medals</button>}<button className="text-action" type="button" disabled={busy} onClick={() => { logoutWorkspace(); setStatus({ tone: "info", text: "已登出本次登入狀態；本機工作區資料未刪除。" }); }}><LogOut size={14} />登出並取消選取</button></div> : <div className="empty-workspace"><ShieldAlert size={20} /><p>請登入、選取已存工作區，或開啟示範模式後再建立與匯入戰績。</p></div>}
+        {session ? <div className="current-workspace"><b>{profileLabel(session.profile)}</b><small>{session.verifiedThisSession ? "本次已由官方登入流程確認" : "已選取的本機工作區；未於本次重新驗證"}</small><code>{session.profile.id}</code>{session.profile.medalsSnapshot && <div className="medals-snapshot"><b>MEDALS SNAPSHOT</b><span>{session.profile.medalsSnapshot.count} 枚 medals · {new Date(session.profile.medalsSnapshot.capturedAt).toLocaleString()}</span><small>本機只保留 player channel 回應中的 `medals` 陣列；不保留排名、積分或其他回應欄位。</small></div>}{session.verifiedThisSession && session.profile.kind === "official" && <button className="secondary-action medals-refresh" type="button" disabled={busy} onClick={() => void onRefreshMedals()}><RefreshCw size={14} />重新取得 medals</button>}<button className="text-action" type="button" disabled={busy} onClick={() => { logoutWorkspace(); setStatus({ tone: "info", text: "已登出本次登入狀態；本機工作區資料未刪除。" }); }}><LogOut size={14} />登出並取消選取</button></div> : <div className="empty-workspace"><ShieldAlert size={20} /><p>請登入、選取已存工作區，或開啟示範模式後再建立戰績。</p></div>}
         {profiles.length > 0 && <div className="profile-list"><div className="profile-list-head"><p className="micro-label">此瀏覽器已知工作區 · {filteredProfiles.length}/{profiles.length}</p><button type="button" className="text-action" onClick={() => setShowWorkspaceList(value => !value)}>{showWorkspaceList ? "收合" : "展開"}</button></div>{showWorkspaceList && <><label className="workspace-search"><Search size={14} /><input value={profileQuery} onChange={event => setProfileQuery(event.target.value)} placeholder="搜尋帳號或工作區 ID" aria-label="搜尋工作區" /></label>{renderProfiles("OFFICIAL ACCOUNTS", officialProfiles, showOfficial, setShowOfficial)}{renderProfiles("DEMO WORKSPACES", demoProfiles, showDemo, setShowDemo)}</>}</div>}
       </aside>
     </div>
