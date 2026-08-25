@@ -12,6 +12,12 @@ describe("approved PVP mod bridge contract", () => {
     expect(loader).toContain('src: "./mods/pvp_double_match_guard.js"');
     expect(guard).toContain("installEmbeddedBridgeClient");
     expect(guard).toContain('body: JSON.stringify(requestBody)');
+    expect(guard).toContain('BRIDGE_HEARTBEAT_MS = 30_000');
+    expect(guard).toContain('getHealthEndpoint');
+    expect(guard).toContain('getStatus');
+    expect(guard).toContain('consecutiveFailures');
+    expect(guard).toContain('BRIDGE_MAX_RETRY_MS');
+    expect(guard).not.toContain('setInterval');
     expect(guard).toContain('api/pvp/capture');
     expect(guard).toContain('workspaceId: String(record.sourcePlayerUserId');
   });

@@ -10,6 +10,18 @@
     "sourceBattleChannel", "sourceBattleId",
   ];
 
+  const BRIDGE_HEARTBEAT_MS = 30_000;
+  const BRIDGE_REQUEST_TIMEOUT_MS = 8_000;
+  const BRIDGE_MAX_RETRY_MS = 120_000;
+  let bridgeStatus = "connecting";
+  let bridgeStatusMessage = "正在確認網站後端";
+  let bridgeLastHeartbeatAt = 0;
+  let bridgeLastSuccessAt = 0;
+  let bridgeLastError = "";
+  let bridgeConsecutiveFailures = 0;
+  let bridgeHeartbeatTimer = null;
+  let bridgeHeartbeatInFlight = false;
+
   function installEmbeddedBridgeClient() {
     if (window.RFLocalBridge?.sendMatch) return;
     const sanitize = (summary) => {
@@ -20,21 +32,92 @@
         BRIDGE_ALLOWED_KEYS.filter((key) => key in summary).map((key) => [key, summary[key]]),
       );
     };
+    const getHealthEndpoint = () => {
+      const endpoint = window.RF_PVP_BACKEND_ENDPOINT || BRIDGE_ENDPOINT;
+      if (endpoint.endsWith("/capture")) return endpoint.slice(0, -"/capture".length) + "/health";
+      if (endpoint.endsWith("/v1/capture")) return endpoint.slice(0, -"/v1/capture".length) + "/health";
+      return endpoint.replace(/\/$/, "") + "/health";
+    };
+    const setStatus = (status, message, error = "") => {
+      bridgeStatus = status;
+      bridgeStatusMessage = message;
+      bridgeLastError = error ? String(error).slice(0, 180) : "";
+      if (typeof window.RF_PVP_Debug?.onBridgeStatus === "function") window.RF_PVP_Debug.onBridgeStatus();
+    };
+    const scheduleHeartbeat = (delay = BRIDGE_HEARTBEAT_MS) => {
+      if (bridgeHeartbeatTimer) window.clearTimeout(bridgeHeartbeatTimer);
+      bridgeHeartbeatTimer = window.setTimeout(() => { void probeHealth(); }, delay);
+    };
+    const probeHealth = async () => {
+      if (bridgeHeartbeatInFlight) return;
+      bridgeHeartbeatInFlight = true;
+      setStatus(bridgeConsecutiveFailures ? "reconnecting" : "connecting", bridgeConsecutiveFailures ? "重連中：正在確認網站後端" : "正在確認網站後端");
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), BRIDGE_REQUEST_TIMEOUT_MS);
+      try {
+        const response = await fetch(getHealthEndpoint(), { method: "GET", cache: "no-store", signal: controller.signal });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || result.ok !== true) throw new Error(result.error || `health HTTP ${response.status}`);
+        bridgeLastHeartbeatAt = Date.now();
+        bridgeLastSuccessAt = bridgeLastHeartbeatAt;
+        bridgeConsecutiveFailures = 0;
+        setStatus("online", "已連線：心跳正常");
+        scheduleHeartbeat();
+      } catch (error) {
+        bridgeConsecutiveFailures += 1;
+        const retryDelay = Math.min(BRIDGE_MAX_RETRY_MS, BRIDGE_HEARTBEAT_MS * (2 ** Math.min(bridgeConsecutiveFailures - 1, 2)));
+        setStatus("reconnecting", `重連中：${retryDelay / 1000} 秒後重試`, error?.name === "AbortError" ? "health timeout" : error?.message || error);
+        scheduleHeartbeat(retryDelay);
+      } finally {
+        window.clearTimeout(timeout);
+        bridgeHeartbeatInFlight = false;
+        if (typeof window.RF_PVP_Debug?.onBridgeStatus === "function") window.RF_PVP_Debug.onBridgeStatus();
+      }
+    };
     const sendMatch = async (summary) => {
       const endpoint = window.RF_PVP_BACKEND_ENDPOINT || BRIDGE_ENDPOINT;
       const requestBody = { type: "match", workspaceId: summary.workspaceId, data: sanitize(summary) };
       if (!window.RF_PVP_BACKEND_ENDPOINT && endpoint === LOCAL_BRIDGE_ENDPOINT) delete requestBody.workspaceId;
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result.accepted) throw new Error(result.error || `bridge HTTP ${response.status}`);
-      return result;
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), BRIDGE_REQUEST_TIMEOUT_MS);
+      setStatus("sending", "正在上傳完整戰績");
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.accepted) throw new Error(result.error || `bridge HTTP ${response.status}`);
+        bridgeLastSuccessAt = Date.now();
+        bridgeConsecutiveFailures = 0;
+        setStatus("online", "已連線：戰績已送達");
+        scheduleHeartbeat();
+        return result;
+      } catch (error) {
+        bridgeConsecutiveFailures += 1;
+        setStatus("reconnecting", "戰績送出失敗：等待重連", error?.name === "AbortError" ? "capture timeout" : error?.message || error);
+        scheduleHeartbeat(1_000);
+        throw error;
+      } finally {
+        window.clearTimeout(timeout);
+        if (typeof window.RF_PVP_Debug?.onBridgeStatus === "function") window.RF_PVP_Debug.onBridgeStatus();
+      }
     };
-    window.RFLocalBridge = Object.freeze({ sendMatch, endpoint: BRIDGE_ENDPOINT });
-    console.log(`[RF bridge] embedded client ready; endpoint=${BRIDGE_ENDPOINT}`);
+    const getStatus = () => ({
+      endpoint: window.RF_PVP_BACKEND_ENDPOINT || BRIDGE_ENDPOINT,
+      healthEndpoint: getHealthEndpoint(),
+      status: bridgeStatus,
+      message: bridgeStatusMessage,
+      lastHeartbeatAt: bridgeLastHeartbeatAt || null,
+      lastSuccessAt: bridgeLastSuccessAt || null,
+      consecutiveFailures: bridgeConsecutiveFailures,
+      lastError: bridgeLastError || null,
+    });
+    window.RFLocalBridge = Object.freeze({ sendMatch, probeHealth, getStatus, endpoint: BRIDGE_ENDPOINT });
+    console.log(`[RF bridge] embedded client ready; status=connecting; endpoint=${BRIDGE_ENDPOINT}`);
+    void probeHealth();
   }
 
   installEmbeddedBridgeClient();
@@ -737,7 +820,7 @@
     const body = document.createElement("div");
     body.id = "rf-pvp-guard-body";
     body.style.padding = "10px";
-    body.innerHTML = "<div id='rf-pvp-status' style='margin-bottom:6px;color:#00ff00'>狀態：待機中</div><div id='rf-pvp-transport' style='margin-bottom:6px;color:#ffcc00;font-size:10px;line-height:1.35'>傳輸：初始化中</div><div id='rf-pvp-capture-count' style='margin-bottom:3px;color:#9fc4ff'>PVP 快取：0 / 160</div><div id='rf-pvp-capture-detail' style='margin-bottom:8px;color:#aab;font-size:10px;line-height:1.35'>尚未收到 PVP 候選封包</div><div style='border-top:1px solid #444;padding-top:8px'><div style='margin-bottom:5px;color:#8fd3ff'>可匯出戰績：</div><div id='rf-pvp-record-summary' style='background:#111;padding:5px;font-size:10px;line-height:1.45;border-radius:4px'>尚未收集到完整戰鬥</div></div><div style='border-top:1px solid #444;margin-top:8px;padding-top:8px'><div style='margin-bottom:5px;color:#aaa'>攔截異常日誌：</div><div id='rf-pvp-logs' style='max-height:90px;overflow-y:auto;background:#111;padding:5px;font-size:10px;border-radius:4px'>無記錄</div></div><button id='rf-pvp-export-btn' style='width:100%;margin-top:10px;padding:6px;background:#1769aa;color:white;border:1px solid #5bc0eb;border-radius:4px;cursor:pointer'>下載分析站 JSON</button><button id='rf-pvp-copy-btn' style='width:100%;margin-top:6px;padding:5px;background:#444;color:white;border:none;border-radius:4px;cursor:pointer'>複製安全診斷摘要</button>";
+    body.innerHTML = "<div id='rf-pvp-status' style='margin-bottom:6px;color:#00ff00'>狀態：待機中</div><div id='rf-pvp-bridge' style='margin-bottom:6px;color:#ffcc00;font-size:10px;line-height:1.35'>後端：連線確認中</div><div id='rf-pvp-transport' style='margin-bottom:6px;color:#ffcc00;font-size:10px;line-height:1.35'>傳輸：初始化中</div><div id='rf-pvp-capture-count' style='margin-bottom:3px;color:#9fc4ff'>PVP 快取：0 / 160</div><div id='rf-pvp-capture-detail' style='margin-bottom:8px;color:#aab;font-size:10px;line-height:1.35'>尚未收到 PVP 候選封包</div><div style='border-top:1px solid #444;padding-top:8px'><div style='margin-bottom:5px;color:#8fd3ff'>可匯出戰績：</div><div id='rf-pvp-record-summary' style='background:#111;padding:5px;font-size:10px;line-height:1.45;border-radius:4px'>尚未收集到完整戰鬥</div></div><div style='border-top:1px solid #444;margin-top:8px;padding-top:8px'><div style='margin-bottom:5px;color:#aaa'>攔截異常日誌：</div><div id='rf-pvp-logs' style='max-height:90px;overflow-y:auto;background:#111;padding:5px;font-size:10px;border-radius:4px'>無記錄</div></div><button id='rf-pvp-export-btn' style='width:100%;margin-top:10px;padding:6px;background:#1769aa;color:white;border:1px solid #5bc0eb;border-radius:4px;cursor:pointer'>下載分析站 JSON</button><button id='rf-pvp-copy-btn' style='width:100%;margin-top:6px;padding:5px;background:#444;color:white;border:none;border-radius:4px;cursor:pointer'>複製安全診斷摘要</button>";
 
     uiPanel.append(header, body);
     document.body.appendChild(uiPanel);
@@ -799,7 +882,7 @@
     document.getElementById("rf-pvp-export-btn").onclick = downloadAnalyzerExport;
     document.getElementById("rf-pvp-copy-btn").onclick = async () => {
       const diagnostics = {
-        guardVersion: 11,
+        guardVersion: 12,
         transport: window.__RF_PVP_SOCKET_TAP__?.getStatus?.() || { attached: false, message: transportMessage },
         captureStats: readCaptureStats(),
         capturedSinceLoad,
@@ -836,6 +919,17 @@
         ? `PVP 累計 ${captureStats.totalCaptured}；循環淘汰 ${captureStats.evictedCount}。最近：${last.topic} / ${last.event}（${new Date(last.capturedAt).toLocaleTimeString()}）${captureStats.lastCandidate ? `；候選摘要 ${captureStats.candidateSummaryCount}，最近 ${captureStats.lastCandidate.topic} / ${captureStats.lastCandidate.event}` : ""}`
         : (captureStats.lastCandidate ? `尚未辨識 PVP；安全候選摘要 ${captureStats.candidateSummaryCount}，最近：${captureStats.lastCandidate.topic} / ${captureStats.lastCandidate.event}` : "尚未收到 PVP 候選封包");
     }
+    const bridgeEl = document.getElementById("rf-pvp-bridge");
+    if (bridgeEl) {
+      const bridge = window.RFLocalBridge?.getStatus?.();
+      const statusLabels = { connecting: "連線中", online: "已連線", sending: "上傳中", reconnecting: "重連中" };
+      const label = statusLabels[bridge?.status] || "未啟用";
+      const heartbeat = bridge?.lastHeartbeatAt ? `；最近心跳 ${new Date(bridge.lastHeartbeatAt).toLocaleTimeString()}` : "";
+      const failure = bridge?.consecutiveFailures ? `；失敗 ${bridge.consecutiveFailures} 次` : "";
+      bridgeEl.textContent = `後端：${label}｜${bridge?.message || "未初始化"}${heartbeat}${failure}`;
+      bridgeEl.style.color = bridge?.status === "online" ? "#7dff9a" : bridge?.status === "reconnecting" ? "#ff8888" : "#ffcc00";
+      if (bridge?.lastError) bridgeEl.title = `最近錯誤：${bridge.lastError}`;
+    }
     const transportEl = document.getElementById("rf-pvp-transport");
     if (transportEl) {
       const transportStats = window.__RF_PVP_SOCKET_TAP__?.getStatus?.();
@@ -871,7 +965,9 @@
     buildAnalyzerExport,
     downloadAnalyzerExport,
     clearCapturedEvents: () => writeArray(EVENT_KEY, []),
-    getTransportStatus: () => window.__RF_PVP_SOCKET_TAP__?.getStatus?.() || { attached: false, message: transportMessage },
+      getTransportStatus: () => window.__RF_PVP_SOCKET_TAP__?.getStatus?.() || { attached: false, message: transportMessage },
+    getBridgeStatus: () => window.RFLocalBridge?.getStatus?.() || { status: "unavailable", message: "未安裝 bridge client" },
+    onBridgeStatus: updateUIPanel,
   };
 
   const reattachAfterReturn = () => attachTransportTap("return");
@@ -883,5 +979,5 @@
   if (document.readyState === "complete") createUIPanel();
   else window.addEventListener("load", createUIPanel, { once: true });
   attachTransportTap();
-  console.log(`[${MOD_NAME}] v11 已載入；僅被動保存 PVP 封包及安全分類摘要。回到頁面、從快取還原或重新取得焦點時，會重新確認載入器的觀察器與訂閱，不會攔截 Phoenix 或改寫官方訊框。`);
+  console.log(`[${MOD_NAME}] v12 已載入；後端狀態提供連線中／已連線／上傳中／重連中，並以 30 秒 health 心跳與退避重連維持閒置復原。僅被動保存 PVP 封包及安全分類摘要，不會攔截 Phoenix 或改寫官方訊框。`);
 })();
