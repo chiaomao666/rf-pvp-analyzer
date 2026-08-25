@@ -1,0 +1,36 @@
+# 參考登入流程調查
+
+調查日期：2026-08-25
+
+## 來源
+
+- 介面頁：<https://xiaiyu0028.github.io/RF_site/pages/query.html>
+- 共用前端程式：<https://xiaiyu0028.github.io/RF_site/js/app.js>
+
+## 已確認觀測
+
+參考頁提供 Email、密碼、風險確認核取方塊、「登入並查詢」與「使用示範模式」控制項。頁面明確警告第三方輸入密碼、隱私與服務條款風險，並表示因 CORS 限制，瀏覽器直接連接遊戲伺服器可能失敗。
+
+目前可讀取的 `app.js` 僅提供通用 `fetchAPI`、`loadJSON`、`localStorage` 包裝與介面工具；其中沒有帳號登入端點、帳號存在查詢端點、認證權杖處理或戰績歷史載入實作。因此不得據此假定存在可安全使用的公開帳號查詢 API。
+
+## 對本專案的初步意義
+
+本專案不應模仿參考頁要求輸入遊戲密碼。較安全的可行設計是使用「遊戲帳號／角色識別字」作為本機資料工作區的名稱，並只在已確認公開且具 CORS 支援的官方查詢端點存在時，進行無密碼的帳號存在驗證。帳號與 PVP JSON 的綁定可由 IndexedDB 的 `profileId` 完成；這是同一瀏覽器與同一網域內的資料分區，並非官方帳戶同步。
+
+## 原始主程式與端點預檢補充
+
+- 從本機保存的未修改官方主程式讀得登入使用 `POST /api/users/log_in`，請求內容為 `application/x-www-form-urlencoded`；公開前端設定含 `locale=zh_TW`、`app_version=2.28` 與 `key`。成功登入流程會讀取 `user_id` 與 `user_token` 後建立 WebSocket。
+- 2026-08-25 的 CLI 預檢回傳 Cloudflare HTTP 403，且沒有 `Access-Control-Allow-Origin`；該請求並未完全模擬官方前端的表單格式，不能單獨用於判定瀏覽器登入可行性。
+- 同日從 Pages origin `https://chiaomao666.github.io/rf-pvp-analyzer/` 以官方前端的 `application/x-www-form-urlencoded` 格式與公開 `locale`、`app_version`、`key` 發出**無帳密**瀏覽器 `fetch`。請求可讀取 HTTP `500`／`"Internal Server Error"` 回應，證實該表單格式未被瀏覽器 CORS 阻擋；缺少 Email 與密碼時不得將 500 視為登入成功或帳號不存在。
+- 結論：可實作前端登入流程及其明確錯誤提示，但在未由使用者親自輸入認證資料的情況下，不能驗證有效帳號的成功回應。密碼與 `user_token` 必須只存在於當次請求／記憶體中。
+- 官方 `doLogin` 在收到 `status: "ok"` 時只取用 `data.user_id` 與短期 `data.user_token`，並在後續個人資料載入使用兩者；登入畫面狀態本身會清除帳號與密碼欄位。帳號工作區應只保存成功回傳的 `user_id`，不得保存密碼或 `user_token`。
+
+## 2026-08-25 實作界線
+
+- 分析站已使用官方回應的 `user_id` 建立 `official:<user_id>` 本機工作區；成功登入後才會選取該工作區。密碼只用於當次 `application/x-www-form-urlencoded` 請求，`user_token` 僅存在執行中記憶體，兩者均不會寫入 IndexedDB、localStorage、完整備份或專案檔案。
+- 本機資料庫升級為 profile 分區。戰績、匯入批次、統計、單筆讀取、刪除、備份與還原皆只讀寫目前工作區；直接以其他帳號的詳情 ID 存取會得到不存在結果。
+- 舊版未分區資料不會自動歸屬到第一個登入帳號。登入後必須由使用者在帳號頁明確確認，才會將未綁定戰績與匯入歷程轉移到目前帳號。
+- 一般 JSON 如含有可辨識的 `user_id`／`userId`／`player_id`／`playerId` 且與目前帳號不同，會拒絕匯入；若 JSON 沒有所有者識別，仍可由使用者選擇綁定到目前工作區，但介面會明示無法證明來源帳號。
+- 完整備份新增 `local-backup-v2` 及 profile metadata；v2 只能在相符的帳號工作區還原。舊 `local-backup-v1` 仍可還原，以支援既有備份遷移。
+- 尚未發現並驗證可安全呼叫的官方排名戰歷史查詢通道。因此登入功能只確認帳號、建立本機工作區，不會宣稱已載入遠端 PVP 歷史；歷史資料仍由守衛 JSON 或手動建立提供。
+- 官方登入成功後可確認連線端點與 player channel 的存在；然而本次沒有以使用者認證資料發送或重放 WebSocket join／握手封包，也沒有把其參數形狀視為已驗證契約。因此本專案不實作 WebSocket 歷史查詢，並將遠端歷史載入保留為未驗證範圍。

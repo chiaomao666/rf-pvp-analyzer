@@ -3,6 +3,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import DashboardLayout from "@/components/DashboardLayout";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import Account from "@/pages/Account";
 import Home from "@/pages/Home";
 import Import from "@/pages/Import";
 import MatchDetail from "@/pages/MatchDetail";
@@ -15,11 +16,12 @@ import { useHashLocation } from "wouter/use-hash-location";
 function Shell({ children }: { children: React.ReactNode }) { return <DashboardLayout>{children}</DashboardLayout>; }
 function AppRoutes() {
   return <Switch>
-    <Route path="/"><Shell><Home /></Shell></Route>
     <Route path="/matches"><Shell><Matches /></Shell></Route>
     <Route path="/matches/:id">{params => <Shell><MatchDetail id={Number(params.id)} /></Shell>}</Route>
     <Route path="/record"><Shell><Record /></Shell></Route>
     <Route path="/import"><Shell><Import /></Shell></Route>
+    <Route path="/account"><Shell><Account /></Shell></Route>
+    <Route path="/"><Shell><Home /></Shell></Route>
     <Route path="/404"><NotFound /></Route>
     <Route><NotFound /></Route>
   </Switch>;
