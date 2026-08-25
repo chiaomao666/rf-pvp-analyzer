@@ -48,8 +48,8 @@ export function normalizePvpCapture(input) {
   }
   const battleAt = Number(data?.battleAt);
   const output = { workspaceId, battleAt: Number.isFinite(battleAt) ? Math.trunc(battleAt) : Date.now(), mode, outcome, playerTeam, opponentTeam };
-  for (const key of ["opponentName", "sourceBattleChannel", "sourceBattleId"]) {
-    const value = safeText(data?.[key], key === "opponentName" ? 120 : 500);
+  for (const key of ["playerName", "playerUnion", "opponentName", "opponentUnion", "sourceBattleChannel", "sourceBattleId"]) {
+    const value = safeText(data?.[key], ["playerName", "playerUnion", "opponentName", "opponentUnion"].includes(key) ? 120 : 500);
     if (value) output[key] = value;
   }
   for (const key of ["rankBefore", "rankAfter", "scoreBefore", "scoreAfter"]) {
@@ -69,7 +69,19 @@ export function createPvpBackend() {
     if (!normalized.ok) return { status: 400, body: normalized };
     const data = normalized.data;
     const dedupeKey = `${data.workspaceId}:${data.sourceBattleChannel || data.sourceBattleId || `${data.battleAt}:${data.mode}`}`;
-    if (seen.has(dedupeKey)) return { status: 200, body: { accepted: true, duplicate: true, latestEventId: events.at(-1)?.id || 0 } };
+    if (seen.has(dedupeKey)) {
+      const existing = events.find((event) => `${event.data.workspaceId}:${event.data.sourceBattleChannel || event.data.sourceBattleId || `${event.data.battleAt}:${event.data.mode}`}` === dedupeKey);
+      if (existing) {
+        const identityKeys = ["playerName", "playerUnion", "opponentName", "opponentUnion"];
+        const changed = identityKeys.some((key) => data[key] && data[key] !== existing.data[key]);
+        if (changed) {
+          existing.data = { ...existing.data, ...data };
+          existing.capturedAt = Date.now();
+          return { status: 200, body: { accepted: true, duplicate: false, updated: true, eventId: existing.id } };
+        }
+        return { status: 200, body: { accepted: true, duplicate: true, latestEventId: existing.id } };
+      }
+    }
     const event = { id: nextId++, capturedAt: Date.now(), type: "match", data };
     seen.add(dedupeKey);
     events.push(event);

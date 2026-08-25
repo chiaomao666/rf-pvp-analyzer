@@ -149,3 +149,21 @@ describe("帳號工作區隔離與備份", () => {
     expect(await listProfiles()).toEqual([]);
   });
 });
+
+describe("同步身份欄位", () => {
+  it("保留 5v5 戰績中的玩家與雙方組織名稱", () => {
+    const team = (prefix: string) => Array.from({ length: 5 }, (_, index) => ({ name: `${prefix}-${index}` }));
+    const parsed = parsePvpJson(JSON.stringify({
+      battleAt: 1787603139254,
+      mode: "5v5",
+      outcome: "win",
+      playerName: "我方玩家",
+      playerUnion: "我方聯盟",
+      opponentName: "對手玩家",
+      opponentUnion: "對手聯盟",
+      playerTeam: team("我方"),
+      opponentTeam: team("對手"),
+    }));
+    expect(parsed.records[0]).toMatchObject({ playerName: "我方玩家", playerUnion: "我方聯盟", opponentName: "對手玩家", opponentUnion: "對手聯盟" });
+  });
+});

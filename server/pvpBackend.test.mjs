@@ -11,6 +11,10 @@ const capture = (workspaceId = "832459") => ({
     outcome: "win",
     playerTeam: team("P"),
     opponentTeam: team("O"),
+    playerName: "我方玩家",
+    playerUnion: "我方聯盟",
+    opponentName: "對手玩家",
+    opponentUnion: "對手聯盟",
     sourceBattleChannel: "pvp_battle:abc",
     password: "must-not-survive",
     rawFrame: { token: "must-not-survive" },
@@ -25,6 +29,17 @@ describe("pvp backend capture contract", () => {
     expect(result.data).not.toHaveProperty("password");
     expect(result.data).not.toHaveProperty("rawFrame");
     expect(result.data.playerTeam).toHaveLength(5);
+    expect(result.data).toMatchObject({ playerName: "我方玩家", playerUnion: "我方聯盟", opponentName: "對手玩家", opponentUnion: "對手聯盟" });
+  });
+
+  it("updates a same-source record when late identity fields arrive", () => {
+    const backend = createPvpBackend();
+    const first = capture();
+    delete first.data.playerUnion;
+    delete first.data.opponentUnion;
+    expect(backend.capture(first).status).toBe(202);
+    expect(backend.capture(capture()).body).toMatchObject({ duplicate: false, updated: true });
+    expect(backend.list(0, "832459").events[0].data).toMatchObject({ playerUnion: "我方聯盟", opponentUnion: "對手聯盟" });
   });
 
   it("deduplicates by workspace and source battle identity", () => {

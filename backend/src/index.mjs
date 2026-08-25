@@ -52,8 +52,8 @@ export function normalizeCapture(input) {
     playerTeam,
     opponentTeam,
   };
-  for (const key of ["opponentName", "sourceBattleChannel", "sourceBattleId"]) {
-    const value = safeText(data?.[key], key === "opponentName" ? 120 : 500);
+  for (const key of ["playerName", "playerUnion", "opponentName", "opponentUnion", "sourceBattleChannel", "sourceBattleId"]) {
+    const value = safeText(data?.[key], ["playerName", "playerUnion", "opponentName", "opponentUnion"].includes(key) ? 120 : 500);
     if (value) normalized[key] = value;
   }
   for (const key of ["rankBefore", "rankAfter", "scoreBefore", "scoreAfter"]) {
@@ -115,7 +115,20 @@ export default {
         if (!normalized.ok) return json(normalized, 400, headers);
         const { data, sourceKey } = normalized;
         const existing = await env.DB.prepare("SELECT id FROM pvp_events WHERE workspace_id = ? AND source_key = ?").bind(data.workspaceId, sourceKey).first();
-        if (existing) return json({ accepted: true, duplicate: true, eventId: Number(existing.id) }, 200, headers);
+        if (existing) {
+          const existingRow = await env.DB.prepare("SELECT payload_json FROM pvp_events WHERE id = ?").bind(existing.id).first();
+          let merged = data;
+          try {
+            const previous = JSON.parse(existingRow?.payload_json || "{}");
+            merged = { ...previous, ...data };
+            for (const key of ["playerName", "playerUnion", "opponentName", "opponentUnion"]) {
+              if (!data[key] && previous[key]) merged[key] = previous[key];
+            }
+          } catch {}
+          const changedIdentity = ["playerName", "playerUnion", "opponentName", "opponentUnion"].some((key) => data[key] && data[key] !== (JSON.parse(existingRow?.payload_json || "{}")[key] || ""));
+          if (changedIdentity) await env.DB.prepare("UPDATE pvp_events SET payload_json = ?, captured_at = ? WHERE id = ?").bind(JSON.stringify(merged), Date.now(), existing.id).run();
+          return json({ accepted: true, duplicate: !changedIdentity, updated: changedIdentity, eventId: Number(existing.id) }, 200, headers);
+        }
         const result = await env.DB.prepare("INSERT INTO pvp_events (workspace_id, source_key, payload_json, captured_at) VALUES (?, ?, ?, ?)").bind(data.workspaceId, sourceKey, JSON.stringify(data), Date.now()).run();
         return json({ accepted: true, duplicate: false, eventId: Number(result.meta.last_row_id) }, 202, headers);
       }

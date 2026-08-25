@@ -223,5 +223,12 @@
 - [x] 清理移除 JSON 後殘留的舊功能按鈕或區塊；完成全域搜尋與首頁／新增紀錄頁清理。
 - [x] 將帳號工作區移到新增紀錄旁邊，並以遊戲內玩家名稱取代帳號編號／帳號名稱顯示。
 - [x] 在我方與對手隊伍區塊顯示玩家名稱與組織名稱，移除原本不明顯位置的對手名稱顯示；保留舊資料安全回退。
-- [ ] 將版本頁尾、Worker 同步提示、導覽與玩家／組織名稱顯示的介面修改提交並推送到 `chiaomao666/rf-pvp-analyzer`。
-- [ ] 確認 GitHub Pages workflow 成功完成，並驗證公開站載入最新介面。
+- [x] 將版本頁尾、Worker 同步提示、導覽與玩家／組織名稱顯示的介面修改提交並推送到 `chiaomao666/rf-pvp-analyzer`。
+- [x] 確認 GitHub Pages workflow 成功完成，並驗證公開站載入最新介面。
+- [x] 解析使用者提供的 `pvp_opponent_persist.js`，確認 WebSocket 組織名稱欄位路徑。
+- [x] 將我方／對手組織名稱接入 mod、Worker payload、IndexedDB 與戰績詳情顯示。
+- [x] 補上組織名稱解析與舊資料回退測試，並驗證公開同步資料流。
+
+- [x] 完成 AniDoor DOM 玩家／組織名稱擷取並串接至 5v5 守衛戰績。
+- [x] 更新 Worker 與 IndexedDB parser 的玩家／組織欄位及晚到身份更新。
+- [x] 以回歸測試、正式建置與端到端 smoke test 驗證身份同步，並推送 GitHub。
