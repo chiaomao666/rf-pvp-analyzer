@@ -14,6 +14,8 @@ pnpm install --frozen-lockfile
 pnpm bridge
 ```
 
+Windows 使用者也可以直接雙擊專案根目錄的 `START_BRIDGE_WINDOWS.bat`。啟動檔會依自身位置尋找 `bridge\\rf-bridge.mjs`，不要求目前 PowerShell 工作目錄正好位於專案根目錄；若只把 `.bat` 與 `rf-bridge.mjs` 放在同一資料夾，也可以直接啟動。
+
 成功時會看到 `http://127.0.0.1:8787`。GitHub Pages 網站可以仍然使用遠端網址；bridge 必須在你遊戲與瀏覽器所在的同一台電腦啟動。帳號頁的「本機橋接」卡片預設關閉，確認安全邊界後再手動啟用輪詢。
 
 ## 先做連線測試

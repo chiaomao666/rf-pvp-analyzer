@@ -1,9 +1,18 @@
 @echo off
-setlocal
-cd /d "%~dp0"
+setlocal EnableExtensions
 
-if not exist "package.json" (
-  echo [ERROR] package.json not found. Run this file from the project root.
+rem Always resolve paths relative to this .bat file, not the current PowerShell folder.
+set "SCRIPT_DIR=%~dp0"
+set "BRIDGE_SCRIPT="
+
+if exist "%SCRIPT_DIR%bridge\rf-bridge.mjs" set "BRIDGE_SCRIPT=%SCRIPT_DIR%bridge\rf-bridge.mjs"
+if not defined BRIDGE_SCRIPT if exist "%SCRIPT_DIR%rf-bridge.mjs" set "BRIDGE_SCRIPT=%SCRIPT_DIR%rf-bridge.mjs"
+if not defined BRIDGE_SCRIPT if exist "%SCRIPT_DIR%..\bridge\rf-bridge.mjs" set "BRIDGE_SCRIPT=%SCRIPT_DIR%..\bridge\rf-bridge.mjs"
+
+if not defined BRIDGE_SCRIPT (
+  echo [ERROR] Cannot find rf-bridge.mjs.
+  echo Put this file in the RF PVP Analyzer project root, next to the bridge folder,
+  echo or put it in the same folder as rf-bridge.mjs.
   pause
   exit /b 1
 )
@@ -15,26 +24,10 @@ if errorlevel 1 (
   exit /b 1
 )
 
-where pnpm >nul 2>nul
-if errorlevel 1 (
-  echo [ERROR] pnpm is not available.
-  echo Run these commands once in PowerShell, then run this file again:
-  echo   corepack enable
-  echo   corepack prepare pnpm@10.4.1 --activate
-  pause
-  exit /b 1
-)
-
-if not exist "node_modules" (
-  echo [INFO] Installing dependencies for the first run...
-  call pnpm install --frozen-lockfile
-  if errorlevel 1 (
-    echo [ERROR] Dependency installation failed.
-    pause
-    exit /b 1
-  )
-)
-
 echo [INFO] Starting RF PVP Analyzer Localhost Bridge on 127.0.0.1:8787...
-call pnpm bridge
+node "%BRIDGE_SCRIPT%"
+set "EXIT_CODE=%ERRORLEVEL%"
+if not "%EXIT_CODE%"=="0" echo [ERROR] Bridge stopped with exit code %EXIT_CODE%.
 pause
+exit /b %EXIT_CODE%
+

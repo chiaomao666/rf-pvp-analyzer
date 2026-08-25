@@ -165,3 +165,6 @@
 - [x] 設計並實作可直接給 mod 使用的合併 bridge 檔案，同時保留 Node bridge server 的獨立啟動能力。
 - [x] 更新 loader、Windows 啟動檔、bridge 文件與 contract 測試以符合合併後結構。
 - [x] 重新執行 Vitest、TypeScript、mod 語法檢查、正式建置與 bridge smoke test。
+
+- [x] 修正 START_BRIDGE_WINDOWS.bat 從任意工作目錄啟動時找不到 package.json 的問題。
+- [x] 補充 bridge Windows 啟動檔的專案位置與錯誤提示，並驗證檔案內容與正式建置不受影響。
