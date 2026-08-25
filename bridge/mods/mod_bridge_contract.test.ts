@@ -18,7 +18,8 @@ describe("approved PVP mod bridge contract", () => {
     expect(guard).toContain('consecutiveFailures');
     expect(guard).toContain('BRIDGE_MAX_RETRY_MS');
     expect(guard).not.toContain('setInterval');
-    expect(guard).toContain('api/pvp/capture');
+    expect(guard).toContain('window.RF_PVP_BACKEND_ENDPOINT');
+    expect(guard).toContain('X-RF-API-Key');
     expect(guard).toContain('workspaceId: String(record.sourcePlayerUserId');
   });
 

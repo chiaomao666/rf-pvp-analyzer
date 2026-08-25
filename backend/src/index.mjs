@@ -1,0 +1,136 @@
+const MAX_BODY_BYTES = 512_000;
+const ALLOWED_MODES = new Set(["1v1", "3v3", "5v5"]);
+const ALLOWED_OUTCOMES = new Set(["win", "loss", "draw", "unknown"]);
+
+function asObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+}
+
+function safeText(value, max = 200) {
+  return typeof value === "string" && value.trim() ? value.trim().slice(0, max) : undefined;
+}
+
+function safeTeam(value) {
+  return (Array.isArray(value) ? value : []).slice(0, 5).map((member) => {
+    const input = asObject(member);
+    const name = safeText(input?.name, 120);
+    if (!name) return null;
+    const output = { name };
+    for (const key of ["level", "power"]) {
+      const number = Number(input?.[key]);
+      if (Number.isFinite(number) && number >= 0) output[key] = Math.trunc(number);
+    }
+    for (const key of ["role", "rarity"]) {
+      const text = safeText(input?.[key], 80);
+      if (text) output[key] = text;
+    }
+    return output;
+  }).filter(Boolean);
+}
+
+export function normalizeCapture(input) {
+  const body = asObject(input);
+  const data = asObject(body?.data) || body;
+  const workspaceId = safeText(body?.workspaceId || data?.workspaceId, 80);
+  const mode = safeText(data?.mode, 10);
+  const outcome = safeText(data?.outcome, 10);
+  const playerTeam = safeTeam(data?.playerTeam);
+  const opponentTeam = safeTeam(data?.opponentTeam);
+  if (!workspaceId || !mode || !ALLOWED_MODES.has(mode) || !outcome || !ALLOWED_OUTCOMES.has(outcome)) {
+    return { ok: false, error: "workspaceId、mode 或 outcome 無效" };
+  }
+  if (!playerTeam.length || !opponentTeam.length) return { ok: false, error: "雙方隊伍不可為空" };
+  if (mode === "5v5" && (playerTeam.length !== 5 || opponentTeam.length !== 5)) {
+    return { ok: false, error: "5v5 必須包含雙方各 5 名成員" };
+  }
+  const battleAt = Number(data?.battleAt);
+  const normalized = {
+    workspaceId,
+    battleAt: Number.isFinite(battleAt) ? Math.trunc(battleAt) : Date.now(),
+    mode,
+    outcome,
+    playerTeam,
+    opponentTeam,
+  };
+  for (const key of ["opponentName", "sourceBattleChannel", "sourceBattleId"]) {
+    const value = safeText(data?.[key], key === "opponentName" ? 120 : 500);
+    if (value) normalized[key] = value;
+  }
+  for (const key of ["rankBefore", "rankAfter", "scoreBefore", "scoreAfter"]) {
+    const value = Number(data?.[key]);
+    if (Number.isInteger(value) && value >= 0) normalized[key] = value;
+  }
+  const sourceKey = normalized.sourceBattleChannel || normalized.sourceBattleId || `${normalized.battleAt}:${normalized.mode}`;
+  return { ok: true, data: normalized, sourceKey: sourceKey.slice(0, 500) };
+}
+
+function json(data, status = 200, headers = {}) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...headers },
+  });
+}
+
+function cors(request, env) {
+  const origin = request.headers.get("Origin") || "";
+  const allowed = String(env.ALLOWED_ORIGINS || "*").split(",").map((item) => item.trim());
+  const allowOrigin = allowed.includes("*") || allowed.includes(origin) ? (allowed.includes("*") ? "*" : origin) : "null";
+  return {
+    "access-control-allow-origin": allowOrigin,
+    "access-control-allow-methods": "GET,POST,OPTIONS",
+    "access-control-allow-headers": "Content-Type, Accept, X-RF-API-Key",
+    "vary": "Origin",
+  };
+}
+
+function authorizedCapture(request, env) {
+  const expected = String(env.PVP_API_KEY || "").trim();
+  if (!expected) return true;
+  return request.headers.get("X-RF-API-Key") === expected;
+}
+
+async function readBody(request) {
+  const text = await request.text();
+  if (new TextEncoder().encode(text).byteLength > MAX_BODY_BYTES) throw new Error("request body too large");
+  try { return text ? JSON.parse(text) : {}; } catch { throw new Error("invalid JSON"); }
+}
+
+async function health(env) {
+  const row = await env.DB.prepare("SELECT COUNT(*) AS count FROM pvp_events").first();
+  const latest = await env.DB.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM pvp_events").first();
+  return { ok: true, durable: true, queueSize: Number(row?.count || 0), latestEventId: Number(latest?.id || 0) };
+}
+
+export default {
+  async fetch(request, env) {
+    const headers = cors(request, env);
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers });
+    const url = new URL(request.url);
+    if (!url.pathname.startsWith("/api/pvp/")) return json({ error: "not found" }, 404, headers);
+    try {
+      if (request.method === "GET" && url.pathname === "/api/pvp/health") return json(await health(env), 200, headers);
+      if (request.method === "POST" && url.pathname === "/api/pvp/capture") {
+        if (!authorizedCapture(request, env)) return json({ error: "unauthorized" }, 401, headers);
+        const normalized = normalizeCapture(await readBody(request));
+        if (!normalized.ok) return json(normalized, 400, headers);
+        const { data, sourceKey } = normalized;
+        const existing = await env.DB.prepare("SELECT id FROM pvp_events WHERE workspace_id = ? AND source_key = ?").bind(data.workspaceId, sourceKey).first();
+        if (existing) return json({ accepted: true, duplicate: true, eventId: Number(existing.id) }, 200, headers);
+        const result = await env.DB.prepare("INSERT INTO pvp_events (workspace_id, source_key, payload_json, captured_at) VALUES (?, ?, ?, ?)").bind(data.workspaceId, sourceKey, JSON.stringify(data), Date.now()).run();
+        return json({ accepted: true, duplicate: false, eventId: Number(result.meta.last_row_id) }, 202, headers);
+      }
+      if (request.method === "GET" && url.pathname === "/api/pvp/events") {
+        const after = Math.max(0, Number.parseInt(url.searchParams.get("after") || "0", 10) || 0);
+        const workspaceId = safeText(url.searchParams.get("workspaceId"), 80);
+        if (!workspaceId) return json({ error: "workspaceId is required" }, 400, headers);
+        const rows = await env.DB.prepare("SELECT id, captured_at, payload_json FROM pvp_events WHERE workspace_id = ? AND id > ? ORDER BY id ASC LIMIT 160").bind(workspaceId, after).all();
+        const events = (rows.results || []).map((row) => ({ id: Number(row.id), capturedAt: Number(row.captured_at), type: "match", data: JSON.parse(row.payload_json) }));
+        const latest = await env.DB.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM pvp_events").first();
+        return json({ events, latestEventId: Number(latest?.id || 0), durable: true }, 200, headers);
+      }
+      return json({ error: "not found" }, 404, headers);
+    } catch (error) {
+      return json({ error: "server error", detail: error instanceof Error ? error.message : "unknown" }, 500, headers);
+    }
+  },
+};

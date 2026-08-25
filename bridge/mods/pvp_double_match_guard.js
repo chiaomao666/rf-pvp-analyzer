@@ -2,8 +2,10 @@
   "use strict";
 
   // 瀏覽器側 bridge client 內嵌於本守衛；Node localhost server 仍維持獨立檔案。
-  const BRIDGE_ENDPOINT = window.RF_PVP_BACKEND_ENDPOINT || "https://rfpvpanlyz-wgxynphd.manus.space/api/pvp/capture";
-  const LOCAL_BRIDGE_ENDPOINT = "http://127.0.0.1:8787/v1/capture";
+  const LOCAL_BRIDGE_ENDPOINT = window.RF_PVP_LOCAL_BRIDGE_ENDPOINT || "http://127.0.0.1:8787/v1/capture";
+  // 直接後端模式：由使用者在 loader 載入前設定自己的 Worker capture URL。
+  // 未設定時只使用 localhost fallback，不會把資料送往 Manus 或其他預設網域。
+  const BRIDGE_ENDPOINT = window.RF_PVP_BACKEND_ENDPOINT || LOCAL_BRIDGE_ENDPOINT;
   const BRIDGE_ALLOWED_KEYS = [
     "battleAt", "mode", "outcome", "playerTeam", "opponentTeam", "opponentName",
     "rankBefore", "rankAfter", "scoreBefore", "scoreAfter", "notes",
@@ -33,7 +35,7 @@
       );
     };
     const getHealthEndpoint = () => {
-      const endpoint = window.RF_PVP_BACKEND_ENDPOINT || BRIDGE_ENDPOINT;
+      const endpoint = window.RF_PVP_BACKEND_ENDPOINT || BRIDGE_ENDPOINT || LOCAL_BRIDGE_ENDPOINT;
       if (endpoint.endsWith("/capture")) return endpoint.slice(0, -"/capture".length) + "/health";
       if (endpoint.endsWith("/v1/capture")) return endpoint.slice(0, -"/v1/capture".length) + "/health";
       return endpoint.replace(/\/$/, "") + "/health";
@@ -75,16 +77,20 @@
       }
     };
     const sendMatch = async (summary) => {
-      const endpoint = window.RF_PVP_BACKEND_ENDPOINT || BRIDGE_ENDPOINT;
+      const endpoint = window.RF_PVP_BACKEND_ENDPOINT || BRIDGE_ENDPOINT || LOCAL_BRIDGE_ENDPOINT;
       const requestBody = { type: "match", workspaceId: summary.workspaceId, data: sanitize(summary) };
       if (!window.RF_PVP_BACKEND_ENDPOINT && endpoint === LOCAL_BRIDGE_ENDPOINT) delete requestBody.workspaceId;
       const controller = new AbortController();
       const timeout = window.setTimeout(() => controller.abort(), BRIDGE_REQUEST_TIMEOUT_MS);
       setStatus("sending", "正在上傳完整戰績");
       try {
+        const apiKey = String(window.RF_PVP_API_KEY || "").trim();
         const response = await fetch(endpoint, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(apiKey ? { "X-RF-API-Key": apiKey } : {}),
+          },
           body: JSON.stringify(requestBody),
           signal: controller.signal,
         });
@@ -106,7 +112,7 @@
       }
     };
     const getStatus = () => ({
-      endpoint: window.RF_PVP_BACKEND_ENDPOINT || BRIDGE_ENDPOINT,
+      endpoint: window.RF_PVP_BACKEND_ENDPOINT || BRIDGE_ENDPOINT || LOCAL_BRIDGE_ENDPOINT,
       healthEndpoint: getHealthEndpoint(),
       status: bridgeStatus,
       message: bridgeStatusMessage,

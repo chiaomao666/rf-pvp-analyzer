@@ -71,13 +71,18 @@ Bridge 不會把事件轉送到官方伺服器，也不會取代官方登入與 
 
 The ready-to-copy files are in `bridge/mods/`. The panel loader now loads only `pvp_double_match_guard.js`; its browser-side bridge client is embedded inside that file, so `rf_bridge_client.js` is no longer required. The no-panel loader remains unchanged because it does not install the passive WebSocket tap or load the PVP guard. `rf-bridge.mjs` is intentionally kept as a separate Node process because it binds the localhost port and cannot run inside a browser mod.
 
-## 直接後端模式（試作）
+## 直接後端模式：自建 Cloudflare Worker
 
-目前合併後的 `pvp_double_match_guard.js` 預設會把已由官方 `player medals` 確認的最小戰績摘要送到受管網站的 `/api/pvp/capture`。摘要包含 `workspaceId`、模式、勝負、雙方最多五名成員、排名／分數變化及去重來源鍵；不包含密碼、user token、raw WebSocket frame 或完整原始事件。
+合併後的 `pvp_double_match_guard.js` 不含任何 Manus 或其他受管服務的預設網址。若要直接同步到遠端，請先自行部署 `backend/` 的 Cloudflare Worker + D1，然後在載入守衛前設定自己的 endpoint 與 API key：
 
-後端提供 `GET /api/pvp/health`、`POST /api/pvp/capture` 與 `GET /api/pvp/events?workspaceId=...&after=...`。目前資料只保存在該 Node 程序的記憶體中，服務重啟或 autoscale instance 更換後會清空；這個版本只用來驗證 mod 能否直接連線。若要正式保存跨裝置戰績，下一步必須接入受控資料庫、認證與 workspace 擁有權驗證，不能把目前的公開 workspaceId 當成安全認證。
+```js
+window.RF_PVP_BACKEND_ENDPOINT = "https://rf-pvp-analyzer-api.<你的-subdomain>.workers.dev/api/pvp/capture";
+window.RF_PVP_API_KEY = "只保存於你自己的本機 mod 設定";
+```
 
-若要改回本機模式，可在載入 mod 前設定 `window.RF_PVP_BACKEND_ENDPOINT` 為 localhost capture URL；未設定時使用受管後端試作端點。
+摘要包含 `workspaceId`、模式、勝負、雙方最多五名成員、排名／分數變化及去重來源鍵；不包含密碼、user token、cookie、raw WebSocket frame 或完整原始事件。Worker 提供 `GET /api/pvp/health`、`POST /api/pvp/capture` 與 `GET /api/pvp/events?workspaceId=...&after=...`，資料由 D1 持久化。完整 Cloudflare 與 GitHub Actions 設定請參閱 [`../backend/README.md`](../backend/README.md)。
+
+若未設定遠端 endpoint，守衛會維持未設定狀態，不會猜測或連線到任何第三方網址。若要使用本機模式，請設定 localhost capture URL 或啟動 `rf-bridge.mjs`；本機模式仍是離線 fallback，不會取代自建 Worker。
 
 ## 後端連線狀態與閒置復原
 
@@ -85,4 +90,4 @@ The ready-to-copy files are in `bridge/mods/`. The panel loader now loads only `
 
 直接後端模式每 30 秒發送一次 `GET /api/pvp/health`，單次請求逾時為 8 秒；失敗後使用指數退避重試，最長間隔 60 秒。心跳只確認服務健康，不包含帳號密碼、`user_token`、WebSocket 原始訊框或遊戲戰鬥資料。網頁重新取得焦點或回到頁面時，會立即嘗試恢復連線。
 
-若狀態長期是「後端錯誤」或「重連中」，請確認遠端 API 網址可連線且後端服務仍在運作；若後端暫時不可用，可把 `window.RF_PVP_BACKEND_ENDPOINT` 改為 localhost capture URL，使用本機 bridge fallback。
+若狀態長期是「後端錯誤」或「重連中」，請先確認你自己的 Worker 網址、D1 migration、`PVP_API_KEY` secret、CORS origin 與 API key 是否一致；若遠端暫時不可用，可把 `window.RF_PVP_BACKEND_ENDPOINT` 改為 localhost capture URL，使用本機 bridge fallback。

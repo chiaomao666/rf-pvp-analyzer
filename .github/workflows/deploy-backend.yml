@@ -1,0 +1,53 @@
+name: Deploy RF PVP backend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-backend.yml"
+      - "client/src/lib/localBridge.ts"
+      - "client/src/lib/localBridge.test.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Wrangler
+        run: npm install --global wrangler@latest
+      - name: Create deployment config
+        shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          PVP_D1_DATABASE_ID: ${{ vars.PVP_D1_DATABASE_ID }}
+          PVP_API_ORIGIN: ${{ vars.PVP_API_ORIGIN }}
+        run: |
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$PVP_D1_DATABASE_ID"
+          cp wrangler.toml.example wrangler.toml
+          sed -i "s#REPLACE_WITH_D1_DATABASE_ID#$PVP_D1_DATABASE_ID#" wrangler.toml
+          sed -i "s#https://chiaomao666.github.io#$PVP_API_ORIGIN#" wrangler.toml
+          printf '\\naccount_id = \"%s\"\\n' "$CLOUDFLARE_ACCOUNT_ID" >> wrangler.toml
+      - name: Apply D1 migrations
+        run: wrangler d1 migrations apply rf-pvp-analyzer --remote --config wrangler.toml
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Deploy Worker
+        run: wrangler deploy --config wrangler.toml
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}

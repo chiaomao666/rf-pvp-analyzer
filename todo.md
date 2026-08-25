@@ -183,3 +183,16 @@
 - [x] 為直接後端模式加入低頻 health 心跳、逾時判定與指數退避重連，且不傳送遊戲資料。
 - [x] 補上狀態機、心跳、重連與閒置恢復的 contract／後端回歸測試。
 - [x] 更新 mod 檔案與使用說明，重新驗證語法、測試與 bridge／backend smoke。
+
+- [x] 選定並記錄 GitHub 程式碼庫加外部執行平台的獨立後端方案，說明 GitHub Pages 不執行後端的限制。
+- [x] 抽離 PVP API 為獨立服務，加入持久化資料、CORS、API 金鑰與 workspace 隔離。
+- [x] 建立 GitHub Actions／部署設定與非機密環境變數範本。
+- [x] 更新 mod 與 GitHub Pages 前端使用獨立 API endpoint。
+- [x] 執行測試並推送到 GitHub，整理完整部署與驗證步驟。
+
+- [x] 移除前端與 mod 中所有 Manus 預設 endpoint，改用自建 Worker 設定。
+- [x] 完成 Cloudflare Worker／D1 部署文件與 GitHub Pages 設定說明。
+- [x] 執行完整測試、建置與 Manus reference audit。
+- [x] 推送獨立後端與前端部署設定至使用者 GitHub repository，並驗證 Actions workflow。
+- [x] 交付 mod 檔案與 Cloudflare 設定步驟。
+- [x] 修正 mod contract 測試對固定 `api/pvp/capture` 字串的過時斷言，改驗證可配置 Worker endpoint 與 localhost fallback。

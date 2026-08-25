@@ -1,6 +1,6 @@
 # RF PVP 戰績分析站
 
-此專案是 **Reversed Front 排名戰紀錄與分析網站**的純前端版本。網站由 React 與 Vite 建置，所有戰績、匯入批次與統計資料都只保存於目前瀏覽器的 **IndexedDB**；不需要帳戶、伺服器、MySQL 或任何環境變數，因此可直接部署到 GitHub Pages。
+此專案是 **Reversed Front 排名戰紀錄與分析網站**的純前端版本。網站由 React 與 Vite 建置，預設將戰績、匯入批次與統計資料保存於目前瀏覽器的 **IndexedDB**，因此可直接部署到 GitHub Pages；若需要跨裝置與長期保存，可另外部署本專案提供的 Cloudflare Worker + D1 後端。前端不依賴 Manus backend、MySQL 或 Manus OAuth。
 
 > **資料保存原則：** 資料只屬於「目前瀏覽器 + 目前網站網域」。清除該網站的瀏覽器資料、使用無痕模式、換用其他瀏覽器或改用其他網域，都不會看見原有戰績。每次重要匯入後，請在「匯入資料」頁下載完整 JSON 備份。
 
@@ -13,6 +13,7 @@
 | 歷史、篩選、詳情、排名統計 | 全部由本機資料即時計算，不發出資料 API 請求。 |
 | 刪除戰績 | 使用頁內確認對話刪除目前瀏覽器的本機資料。 |
 | 完整備份／還原 | 匯出所有本機戰績與匯入摘要；可在另一台裝置或 GitHub Pages 網域還原。 |
+| 自建遠端同步（選用） | 透過 Cloudflare Worker + D1 接收 mod 的最小 5v5 摘要，前端以 workspace cursor 輪詢；未設定時不呼叫任何遠端服務。 |
 
 ## 本機啟動
 
@@ -69,6 +70,12 @@ pnpm build
 ```
 
 目前單元測試涵蓋 PVP JSON 正規化、分批匯入工具、刪除互動與 IndexedDB 完整備份還原（含本機自動編號）。
+
+## 自建 Cloudflare 後端（選用）
+
+GitHub Pages 只能提供靜態檔案，不能接收或執行長期背景 API。若要讓遊戲 mod 直接傳送資料並跨裝置保存，請依 [`backend/README.md`](backend/README.md) 部署自己的 Cloudflare Worker + D1。部署後，在 GitHub repository 的 Actions variables 設定 `PVP_BACKEND_ORIGIN`，值為 Worker origin，例如 `https://rf-pvp-analyzer-api.<你的-subdomain>.workers.dev`；Pages workflow 會將它注入為 `VITE_PVP_BACKEND_ORIGIN`。不要把 `/api/pvp`、API key 或尾端斜線放入 origin。
+
+mod 端則在載入 `pvp_double_match_guard.js` 前設定自己的 capture endpoint 與 `X-RF-API-Key` 對應的 key。後端只接收官方 `user_id` workspace、白名單欄位與最多五名成員，支援來源去重與 D1 持久化，不接收密碼、token、cookie 或完整 WebSocket frame。遠端模式只是選用功能；未設定 Worker 時，網站仍可完整使用 IndexedDB，並可改用下方的本機 bridge。
 
 ## 本機橋接模式
 
