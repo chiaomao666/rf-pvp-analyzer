@@ -1,6 +1,7 @@
 # Project TODO
 
 - [x] 修正 Cloudflare Worker 登入成功後 session cookie 未被後續 `/api/pvp/session`、`/api/pvp/health` 驗證的 401 問題，並驗證跨 GitHub Pages origin 的 credentialed CORS。
+- [ ] 在使用者實際 GitHub Pages 瀏覽器完成一次重新登入後，驗證 `/api/pvp/session` 與 `/api/pvp/health` 不再回傳 401，並確認分割 session cookie 被瀏覽器接受。
 
 - [x] 建立以登入使用者為資料邊界的排名戰資料模型與資料庫遷移。
 - [x] 建立受保護的戰績新增、查詢、詳情與刪除 API。
