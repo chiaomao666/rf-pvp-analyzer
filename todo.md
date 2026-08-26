@@ -1,5 +1,7 @@
 # Project TODO
 
+- [x] 後續凡要求使用者替換、更新或下載 mod 檔案時，均直接以聊天附件交付對應檔案，不只提供文字說明或 GitHub 連結。
+
 - [x] 修正 PVP 守衛在已收到 WebSocket 訊框時未轉交新訊框、未辨識戰鬥且未同步到 Worker 的問題，驗證 endpoint、寫入密鑰與 hook 生命週期。
 - [ ] 在遊戲端更新 PVP 守衛後，完成一次 5v5 並確認 mod health heartbeat、完整戰績上傳與 Worker events 均成功。
 
