@@ -239,3 +239,9 @@
 - [x] 在不依賴 Manus 本機網站後端的前提下，移除網站啟動與 API runtime 接線，保留遊戲 bridge 與 Cloudflare Worker 部署檔。
 - [x] 為跨來源舊資料提供安全且可說明的恢復／遷移提示，並避免登入後誤顯示空白工作區。
 - [x] 驗證公開站登入、Worker 事件讀回、5v5 身份資料與 GitHub Pages／Worker 部署。
+
+- [x] 核對本機 PVP 監視器顯示的連線、快取、封包與完整戰績狀態，判斷是否真的故障。
+- [x] 修復受管部署仍尋找 dist/index.js 的啟動設定，避免純前端版本發布後網站不可用。
+- [x] 核對 GitHub Pages 最近更新時間、最新 commit 與 workflow，區分快取／部署時間／程式版本。
+
+- [x] 為受管預覽環境補上僅服務 dist/public 的靜態檔案啟動入口，不恢復任何 Manus／本機資料 API。
