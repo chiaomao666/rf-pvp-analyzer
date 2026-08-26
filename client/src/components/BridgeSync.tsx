@@ -21,9 +21,11 @@ export default function BridgeSync() {
       if (window.location.hash.replace(/^#/, "").split("?")[0] === "/account") return;
       running = true;
       try {
-        if (!isLocalBridgeEnabled() || !getWorkspaceSession()) return;
+        if (!isLocalBridgeEnabled()) return;
+        // session 是記憶體狀態；公開站重新整理後必須先由 localStorage／IndexedDB 恢復，
+        // 否則會在恢復前直接 return，導致 Worker 中的既有戰績完全不會被讀回。
         await restoreStoredWorkspace(getActiveProfileId());
-        if (!getActiveProfileId()) return;
+        if (!getWorkspaceSession() || !getActiveProfileId()) return;
         await checkLocalBridge();
         const result = await pollLocalBridge(getLocalBridgeCursor());
         let cursor = getLocalBridgeCursor();

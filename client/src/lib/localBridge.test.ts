@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { checkLocalBridge, getBridgeMode, localBridgeOrigin, pollLocalBridge } from "./localBridge";
+import { checkLocalBridge, getBridgeMode, isLocalBridgeEnabled, localBridgeOrigin, pollLocalBridge } from "./localBridge";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -39,6 +39,13 @@ describe("local bridge client", () => {
     const localStorage = new Map<string, string>();
     vi.stubGlobal("window", { localStorage: { getItem: (key: string) => localStorage.get(key) ?? null }, dispatchEvent: vi.fn() });
     expect(getBridgeMode()).toBe("remote");
+  });
+
+  it("enables remote sync by default when a Worker origin exists and no choice was saved", () => {
+    vi.stubEnv("VITE_PVP_BACKEND_ORIGIN", "https://rf-pvp-api.example.workers.dev");
+    const localStorage = new Map<string, string>();
+    vi.stubGlobal("window", { localStorage: { getItem: (key: string) => localStorage.get(key) ?? null }, dispatchEvent: vi.fn() });
+    expect(isLocalBridgeEnabled()).toBe(true);
   });
 
   it("migrates an old implicit local mode to remote, while preserving explicit local choice", () => {

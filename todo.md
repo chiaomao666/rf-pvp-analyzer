@@ -234,3 +234,8 @@
 - [x] 以回歸測試、正式建置與端到端 smoke test 驗證身份同步，並推送 GitHub。
 
 - [x] 核對 a48ec5f5 是否已推送至 chiaomao666/rf-pvp-analyzer，若未推送則完成提交與推送並驗證 Actions。
+
+- [x] 將 GitHub Pages 戰績讀取統一為 Cloudflare Worker／D1，明確區分瀏覽器本機資料與雲端資料。
+- [x] 在不依賴 Manus 本機網站後端的前提下，移除網站啟動與 API runtime 接線，保留遊戲 bridge 與 Cloudflare Worker 部署檔。
+- [x] 為跨來源舊資料提供安全且可說明的恢復／遷移提示，並避免登入後誤顯示空白工作區。
+- [x] 驗證公開站登入、Worker 事件讀回、5v5 身份資料與 GitHub Pages／Worker 部署。

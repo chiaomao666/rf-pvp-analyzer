@@ -48,7 +48,13 @@ export function setBridgeMode(mode: BridgeMode) {
   if (typeof window !== "undefined") window.dispatchEvent(new Event("rf-pvp-bridge-change"));
 }
 export function bridgeOrigin(mode = getBridgeMode()) { return mode === "remote" ? remoteBridgeOrigin() : LOCAL_BRIDGE_ORIGIN; }
-export function isLocalBridgeEnabled() { return storage()?.getItem(ENABLED_KEY) === "true"; }
+export function isLocalBridgeEnabled() {
+  const saved = storage()?.getItem(ENABLED_KEY);
+  if (saved === "true") return true;
+  // GitHub Pages 不需要本機網站後端；有 Worker origin 且使用者尚未明確關閉時，
+  // 預設直接啟用 remote 同步，讓既有 D1 戰績可在登入後讀回。
+  return saved === null && Boolean(remoteBridgeOrigin()) && getBridgeMode() === "remote";
+}
 export function setLocalBridgeEnabled(enabled: boolean) {
   storage()?.setItem(ENABLED_KEY, String(enabled));
   if (typeof window !== "undefined") window.dispatchEvent(new Event("rf-pvp-bridge-change"));
