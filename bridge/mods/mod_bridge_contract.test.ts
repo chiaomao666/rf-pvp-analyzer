@@ -82,6 +82,14 @@ describe("approved PVP mod bridge contract", () => {
     expect(guard).toContain("複製同步診斷");
   });
 
+  it("bounds the local archive and excludes raw frames from persisted events", () => {
+    const guard = read("pvp_double_match_guard.js");
+    expect(guard).toContain("MAX_ARCHIVE_CHARS = 1_500_000");
+    expect(guard).toContain("function compactArchivePayload");
+    expect(guard).toContain("function writeEventArchive");
+    expect(guard).not.toContain("rawFrame: rawFrame === undefined");
+  });
+
   it("keeps credentials and raw frames out of the embedded bridge client", () => {
     const guard = read("pvp_double_match_guard.js");
     const embeddedClient = guard.slice(guard.indexOf("function installEmbeddedBridgeClient"), guard.indexOf("const MOD_NAME"));

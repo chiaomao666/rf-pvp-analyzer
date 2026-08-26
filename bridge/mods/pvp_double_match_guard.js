@@ -134,6 +134,7 @@
   const MAX_EVENTS = 160;
   const ACTIVE_BATTLE_EVENT_LIMIT = 96;
   const ACTIVE_BATTLE_TTL_MS = 10 * 60 * 1000;
+  const MAX_ARCHIVE_CHARS = 1_500_000;
 
   if (window.__RF_PVP_DOUBLE_MATCH_GUARD_V8__) {
     console.warn(`[${MOD_NAME}] 已載入，略過重複安裝。`);
@@ -175,6 +176,38 @@
       return true;
     } catch (error) {
       console.error(`[${MOD_NAME}] 無法儲存 ${key}：`, error);
+      return false;
+    }
+  }
+
+  // localStorage 只保存聚合戰績需要的欄位；完整 rawFrame 不應進入瀏覽器快取。
+  function compactArchivePayload(payload, event, topic) {
+    const source = asObject(payload) || {};
+    const output = {};
+    const copy = (key) => { if (source[key] !== undefined) output[key] = redactAndClone(source[key]); };
+    for (const key of ["status", "channel", "id", "battle_id", "battle_type", "next_action", "error", "response", "offender", "defender", "round"]) copy(key);
+    if (/^player:\\d+$/i.test(String(topic || ""))) {
+      for (const key of ["1v1", "3v3", "5v5", "medals", "previous_record"]) copy(key);
+    }
+    return Object.keys(output).length ? output : redactAndClone(source);
+  }
+
+  function writeEventArchive(events) {
+    let kept = Array.isArray(events) ? events.slice() : [];
+    while (kept.length && JSON.stringify(kept).length > MAX_ARCHIVE_CHARS) kept.splice(0, Math.max(1, Math.ceil(kept.length / 10)));
+    while (kept.length) {
+      try {
+        localStorage.setItem(EVENT_KEY, JSON.stringify(kept));
+        return true;
+      } catch (error) {
+        kept.splice(0, Math.max(1, Math.ceil(kept.length / 10)));
+      }
+    }
+    try {
+      localStorage.removeItem(EVENT_KEY);
+      return true;
+    } catch (error) {
+      console.warn(`[${MOD_NAME}] 無法清理 ${EVENT_KEY}：`, error);
       return false;
     }
   }
@@ -326,17 +359,16 @@
       capturedAtIso: new Date().toISOString(),
       event: String(event),
       topic: typeof topic === "string" ? topic : undefined,
-      payload: redactAndClone(payload),
+      payload: compactArchivePayload(payload, event, topic),
       source,
       ...(location.hash ? { capturedPath: location.hash } : {}),
-      rawFrame: rawFrame === undefined ? undefined : redactAndClone(rawFrame),
     };
     addToActiveBattleBuffer(capturedEvent, event, payload, topic);
     const events = readArray(EVENT_KEY);
     events.push(capturedEvent);
     const evicted = Math.max(0, events.length - MAX_EVENTS);
     if (evicted) events.splice(0, evicted);
-    writeArray(EVENT_KEY, events);
+    writeEventArchive(events);
     const stats = readCaptureStats();
     const payloadObject = asObject(payload);
     stats.totalCaptured += 1;
