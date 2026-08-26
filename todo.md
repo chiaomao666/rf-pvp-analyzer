@@ -272,3 +272,5 @@
 - [ ] 最後一次只推送 GitHub Pages；完成後不再保存 checkpoint、不再發布或更新 Manus 受管網站。
 - [x] 修正最新 GitHub Pages 使用的 PVP mod 組織名稱仍未同步問題，確認實際 DOM 選擇器、payload 與晚到補送流程；只推送 GitHub，不更新 Manus 受管網站。
 - [x] 修正 PVP 守衛 `rf_pvp_event_archive` 因 rawFrame 造成 localStorage QuotaExceededError 的問題，保留戰績聚合所需欄位並只推送 GitHub Pages。
+- [ ] 稽核 Worker／D1 儲存的玩家資料、CORS Origin 白名單、API key、回應暴露與請求限制；必要修正只推送 GitHub，不更新 Manus 受管網站。
+- [x] 實作 A 強安全模式：capture／events 必須 API key、health 移除資料量 metadata、GitHub Pages 以瀏覽器本機設定 API key，金鑰不得進入 repository 或 bundle。

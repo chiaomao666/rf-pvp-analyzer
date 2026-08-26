@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { checkLocalBridge, getBridgeMode, isLocalBridgeEnabled, localBridgeOrigin, pollLocalBridge } from "./localBridge";
+import { checkLocalBridge, getBridgeMode, getRemoteApiKey, isLocalBridgeEnabled, localBridgeOrigin, pollLocalBridge, setRemoteApiKey } from "./localBridge";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -59,16 +59,17 @@ describe("local bridge client", () => {
 
   it("uses the configured remote backend health endpoint", async () => {
     vi.stubEnv("VITE_PVP_BACKEND_ORIGIN", "https://rf-pvp-api.example.workers.dev/");
-    const localStorage = new Map<string, string>([["rf-pvp-bridge-mode", "remote"]]);
+    const localStorage = new Map<string, string>([["rf-pvp-bridge-mode", "remote"], ["rf-pvp-remote-api-key", "secret"]]);
     vi.stubGlobal("window", {
       localStorage: { getItem: (key: string) => localStorage.get(key) ?? null },
       dispatchEvent: vi.fn(),
     });
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true, queueSize: 2, latestEventId: 8 }), { status: 200 }));
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true, durable: true }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(checkLocalBridge()).resolves.toMatchObject({ ok: true, latestEventId: 8 });
+    await expect(checkLocalBridge()).resolves.toMatchObject({ ok: true, durable: true });
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe("https://rf-pvp-api.example.workers.dev/api/pvp/health");
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit).headers).toMatchObject({ "X-RF-API-Key": "secret" });
   });
 
   it("polls the configured remote backend by the active official workspace id", async () => {
@@ -99,6 +100,13 @@ describe("local bridge client", () => {
 
     await expect(checkLocalBridge()).rejects.toThrow("尚未設定網站後端網址");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("stores the remote API key only through the browser storage adapter", () => {
+    const localStorage = new Map<string, string>();
+    vi.stubGlobal("window", { localStorage: { getItem: (key: string) => localStorage.get(key) ?? null, setItem: (key: string, value: string) => localStorage.set(key, value), removeItem: (key: string) => localStorage.delete(key) }, dispatchEvent: vi.fn() });
+    setRemoteApiKey(" secret ");
+    expect(getRemoteApiKey()).toBe("secret");
   });
 
   it("does not retain the former Manus backend origin", () => {

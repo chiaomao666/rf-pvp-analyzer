@@ -6,9 +6,9 @@
 
 | 方法 | 路徑 | 用途 | 認證 |
 | --- | --- | --- | --- |
-| `GET` | `/api/pvp/health` | Worker／D1 健康檢查 | 不需要 |
+| `GET` | `/api/pvp/health` | Worker／D1 健康檢查 | `X-RF-API-Key` |
 | `POST` | `/api/pvp/capture` | 接收最小化 5v5 戰績摘要 | `X-RF-API-Key` |
-| `GET` | `/api/pvp/events?workspaceId=<official-user-id>&after=<cursor>` | 讀取指定工作區的新事件 | 目前為公開讀取，依 workspace 隔離 |
+| `GET` | `/api/pvp/events?workspaceId=<official-user-id>&after=<cursor>` | 讀取指定工作區的新事件 | `X-RF-API-Key`，並依 workspace 隔離 |
 
 後端只接受 `type=match`、官方 `user_id` 工作區與白名單戰績欄位。它不接受或保存遊戲密碼、`user_token`、cookie、完整 WebSocket frame 或任意原始封包。相同來源鍵會去重，事件只會回傳給相同 `workspaceId` 的工作區。
 
@@ -52,13 +52,14 @@ npx wrangler deploy --config wrangler.toml
 https://rf-pvp-analyzer-api.<你的-subdomain>.workers.dev
 ```
 
-驗證健康檢查：
+驗證健康檢查時必須帶 API key；未帶 key 應回應 `401`：
 
 ```powershell
-curl.exe https://rf-pvp-analyzer-api.<你的-subdomain>.workers.dev/api/pvp/health
+curl.exe -i https://rf-pvp-analyzer-api.<你的-subdomain>.workers.dev/api/pvp/health
+curl.exe -i -H "X-RF-API-Key: <你的 PVP_API_KEY>" https://rf-pvp-analyzer-api.<你的-subdomain>.workers.dev/api/pvp/health
 ```
 
-應看到 `ok: true`。第一筆 capture 建議使用不含真實帳號的測試資料，確認 D1 migration、API key 與 CORS 都正常後，再讓 mod 使用。
+第二個請求應看到 `{\"ok\":true,\"durable\":true}`。健康端點不再回傳全域事件總量或最新事件 ID。第一筆 capture 建議使用不含真實帳號的測試資料，確認 D1 migration、API key 與 CORS 都正常後，再讓 mod 使用。
 
 ## GitHub Actions 自動部署
 
@@ -83,7 +84,7 @@ Pages workflow 會讀取 repository variable `PVP_BACKEND_ORIGIN`，並在 `pnpm
 | --- | --- | --- |
 | Variable | `PVP_BACKEND_ORIGIN` | Worker origin，例如 `https://rf-pvp-analyzer-api.<你的-subdomain>.workers.dev` |
 
-這個值只填 origin，不要加 `/api/pvp`，也不要加尾端斜線。重新推送 `main` 或在 Pages workflow 使用 **Run workflow** 後，前端的「Remote Backend」模式才會使用新 Worker。未設定時，前端會明確顯示尚未設定網站後端，不會回退到 Manus 網址。
+這個值只填 origin，不要加 `/api/pvp`，也不要加尾端斜線。重新推送 `main` 或在 Pages workflow 使用 **Run workflow** 後，前端的「Remote Backend」模式才會使用新 Worker。未設定時，前端會明確顯示尚未設定網站後端，不會回退到 Manus 網址。API key 不可放入 `PVP_BACKEND_ORIGIN`、GitHub Actions variable、repository 或 Pages bundle；請在 Pages 的「帳號工作區 → 網站後端」欄位於瀏覽器本機輸入，前端只保存於該瀏覽器的 localStorage。
 
 ## mod 設定
 
@@ -98,7 +99,9 @@ window.RF_PVP_API_KEY = "只放在你自己的瀏覽器 mod 設定";
 
 ## 安全與限制
 
-API key 放在 mod 端代表使用者可在瀏覽器中查看它，因此它適合個人或小範圍自用，不應視為不可破解的公開服務認證。不要把 key 寫入 GitHub、截圖或公開網站。若要多人使用，應改用每裝置短期 token、受信任的本機代理，或另行加入更嚴格的認證與速率限制。
+Worker 現在採 **fail-closed**：`PVP_API_KEY` 未設定或請求沒有完全相同的 `X-RF-API-Key` 時，health、capture 與 events 都回應 `401`；`ALLOWED_ORIGINS` 未列出的瀏覽器 origin 不會取得可用的 CORS 回應。CORS 只是一層瀏覽器限制，不是 IP 防火牆，因此不要把 API key 視為不可破解的公開服務認證。
+
+API key 放在 mod 端代表使用者可在瀏覽器中查看它；Pages 讀取端則由使用者在瀏覽器本機輸入，兩者都適合個人或小範圍自用。不要把 key 寫入 GitHub、截圖、公開網站或前端環境變數。若要多人使用，應改用每裝置短期 token、Cloudflare Access／Zero Trust、受信任的本機代理，並另行加入速率限制與金鑰輪替。Worker 目前不宣稱能依 IP 提供可靠的使用者隔離；若要限制 IP，應在 Cloudflare WAF／防火牆規則另行設定。
 
 D1 是正式持久化資料庫；刪除 database、migration 或 Worker 前請先備份。Cloudflare Worker 及 D1 由使用者自己的 Cloudflare 帳號管理，與 Manus 執行期、Manus OAuth、Manus database 完全無關。
 

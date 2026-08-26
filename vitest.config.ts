@@ -14,6 +14,6 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["client/src/**/*.test.ts", "client/src/**/*.spec.ts", "bridge/**/*.test.ts", "server/**/*.test.mjs"],
+    include: ["client/src/**/*.test.ts", "client/src/**/*.spec.ts", "bridge/**/*.test.ts", "server/**/*.test.mjs", "backend/**/*.test.mjs"],
   },
 });

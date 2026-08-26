@@ -19,6 +19,7 @@ const ENABLED_KEY = "rf-pvp-bridge-enabled";
 const MODE_KEY = "rf-pvp-bridge-mode";
 const MODE_EXPLICIT_KEY = "rf-pvp-bridge-mode-explicit";
 const CURSOR_KEY = "rf-pvp-bridge-cursor";
+const REMOTE_API_KEY = "rf-pvp-remote-api-key";
 const REQUEST_TIMEOUT_MS = 1_200;
 
 function storage(): Storage | null {
@@ -59,6 +60,21 @@ export function setLocalBridgeEnabled(enabled: boolean) {
   storage()?.setItem(ENABLED_KEY, String(enabled));
   if (typeof window !== "undefined") window.dispatchEvent(new Event("rf-pvp-bridge-change"));
 }
+export function getRemoteApiKey() { return storage()?.getItem(REMOTE_API_KEY)?.trim() || ""; }
+export function setRemoteApiKey(value: string) {
+  const key = value.trim();
+  if (key) storage()?.setItem(REMOTE_API_KEY, key); else storage()?.removeItem(REMOTE_API_KEY);
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("rf-pvp-bridge-key-change"));
+}
+export function clearRemoteApiKey() { setRemoteApiKey(""); }
+function remoteHeaders(mode: BridgeMode) {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (mode === "remote") {
+    const key = getRemoteApiKey();
+    if (key) headers["X-RF-API-Key"] = key;
+  }
+  return headers;
+}
 export function getLocalBridgeCursor() {
   const value = Number(storage()?.getItem(CURSOR_KEY) || 0);
   return Number.isSafeInteger(value) && value >= 0 ? value : 0;
@@ -70,7 +86,7 @@ export async function checkLocalBridge(): Promise<LocalBridgeHealth> {
   setBridgeSyncSnapshot({ mode, origin: bridgeOrigin(mode), status: "checking", error: undefined });
   if (mode === "remote" && !remoteBridgeOrigin()) throw new Error("尚未設定網站後端網址");
   const endpoint = mode === "remote" ? `${bridgeOrigin(mode)}/api/pvp/health` : `${bridgeOrigin(mode)}/health`;
-  const response = await request(endpoint, { headers: { Accept: "application/json" } });
+  const response = await request(endpoint, { headers: remoteHeaders(mode) });
   if (!response.ok) throw new Error(`bridge health HTTP ${response.status}`);
   const payload = await response.json() as LocalBridgeHealth;
   if (!payload.ok) throw new Error("bridge health 未確認");
@@ -83,7 +99,7 @@ export async function pollLocalBridge(after = getLocalBridgeCursor()): Promise<{
   setBridgeSyncSnapshot({ mode, origin: bridgeOrigin(mode), status: "checking", error: undefined });
   if (mode === "remote" && !remoteBridgeOrigin()) throw new Error("尚未設定網站後端網址");
   const endpoint = mode === "remote" ? `${bridgeOrigin(mode)}/api/pvp/events?workspaceId=${encodeURIComponent(getActiveWorkspaceId())}&after=${encodeURIComponent(String(after))}` : `${bridgeOrigin(mode)}/v1/events?after=${encodeURIComponent(String(after))}`;
-  const response = await request(endpoint, { headers: { Accept: "application/json" } });
+  const response = await request(endpoint, { headers: remoteHeaders(mode) });
   if (!response.ok) throw new Error(`bridge events HTTP ${response.status}`);
   const payload = await response.json() as { events?: LocalBridgeEvent[]; latestEventId?: number; queueSize?: number };
   const events = Array.isArray(payload.events) ? payload.events.filter(event => event && typeof event.id === "number" && event.type === "match" && event.data && typeof event.data === "object") : [];

@@ -73,8 +73,8 @@ function json(data, status = 200, headers = {}) {
 
 function cors(request, env) {
   const origin = request.headers.get("Origin") || "";
-  const allowed = String(env.ALLOWED_ORIGINS || "*").split(",").map((item) => item.trim());
-  const allowOrigin = allowed.includes("*") || allowed.includes(origin) ? (allowed.includes("*") ? "*" : origin) : "null";
+  const allowed = String(env.ALLOWED_ORIGINS || "").split(",").map((item) => item.trim()).filter(Boolean);
+  const allowOrigin = origin && allowed.includes(origin) ? origin : "null";
   return {
     "access-control-allow-origin": allowOrigin,
     "access-control-allow-methods": "GET,POST,OPTIONS",
@@ -83,10 +83,10 @@ function cors(request, env) {
   };
 }
 
-function authorizedCapture(request, env) {
+function authorizedRequest(request, env) {
   const expected = String(env.PVP_API_KEY || "").trim();
-  if (!expected) return true;
-  return request.headers.get("X-RF-API-Key") === expected;
+  const supplied = request.headers.get("X-RF-API-Key") || "";
+  return Boolean(expected) && supplied === expected;
 }
 
 async function readBody(request) {
@@ -96,9 +96,8 @@ async function readBody(request) {
 }
 
 async function health(env) {
-  const row = await env.DB.prepare("SELECT COUNT(*) AS count FROM pvp_events").first();
-  const latest = await env.DB.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM pvp_events").first();
-  return { ok: true, durable: true, queueSize: Number(row?.count || 0), latestEventId: Number(latest?.id || 0) };
+  await env.DB.prepare("SELECT 1 AS ok").first();
+  return { ok: true, durable: true };
 }
 
 export default {
@@ -108,9 +107,12 @@ export default {
     const url = new URL(request.url);
     if (!url.pathname.startsWith("/api/pvp/")) return json({ error: "not found" }, 404, headers);
     try {
-      if (request.method === "GET" && url.pathname === "/api/pvp/health") return json(await health(env), 200, headers);
+      if (request.method === "GET" && url.pathname === "/api/pvp/health") {
+        if (!authorizedRequest(request, env)) return json({ error: "unauthorized" }, 401, headers);
+        return json(await health(env), 200, headers);
+      }
       if (request.method === "POST" && url.pathname === "/api/pvp/capture") {
-        if (!authorizedCapture(request, env)) return json({ error: "unauthorized" }, 401, headers);
+        if (!authorizedRequest(request, env)) return json({ error: "unauthorized" }, 401, headers);
         const normalized = normalizeCapture(await readBody(request));
         if (!normalized.ok) return json(normalized, 400, headers);
         const { data, sourceKey } = normalized;
@@ -133,17 +135,19 @@ export default {
         return json({ accepted: true, duplicate: false, eventId: Number(result.meta.last_row_id) }, 202, headers);
       }
       if (request.method === "GET" && url.pathname === "/api/pvp/events") {
+        if (!authorizedRequest(request, env)) return json({ error: "unauthorized" }, 401, headers);
         const after = Math.max(0, Number.parseInt(url.searchParams.get("after") || "0", 10) || 0);
         const workspaceId = safeText(url.searchParams.get("workspaceId"), 80);
         if (!workspaceId) return json({ error: "workspaceId is required" }, 400, headers);
         const rows = await env.DB.prepare("SELECT id, captured_at, payload_json FROM pvp_events WHERE workspace_id = ? AND id > ? ORDER BY id ASC LIMIT 160").bind(workspaceId, after).all();
         const events = (rows.results || []).map((row) => ({ id: Number(row.id), capturedAt: Number(row.captured_at), type: "match", data: JSON.parse(row.payload_json) }));
-        const latest = await env.DB.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM pvp_events").first();
+        const latest = await env.DB.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM pvp_events WHERE workspace_id = ?").bind(workspaceId).first();
         return json({ events, latestEventId: Number(latest?.id || 0), durable: true }, 200, headers);
       }
       return json({ error: "not found" }, 404, headers);
     } catch (error) {
-      return json({ error: "server error", detail: error instanceof Error ? error.message : "unknown" }, 500, headers);
+      console.error("PVP worker request failed", error);
+      return json({ error: "server error" }, 500, headers);
     }
   },
 };
