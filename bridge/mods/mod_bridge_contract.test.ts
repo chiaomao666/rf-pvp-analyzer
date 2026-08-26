@@ -23,6 +23,9 @@ describe("approved PVP mod bridge contract", () => {
     expect(guard).not.toContain('setInterval');
     expect(guard).toContain('window.RF_PVP_BACKEND_ENDPOINT');
     expect(guard).toContain('X-RF-Write-Secret');
+    expect(guard).toContain('headers: getWriteHeaders()');
+    expect(guard).toContain('未設定 PVP 寫入密鑰');
+    expect(guard).toContain('PVP_WRITE_SECRET not configured');
     expect(guard).toContain('workspaceId: String(record.sourcePlayerUserId');
   });
 

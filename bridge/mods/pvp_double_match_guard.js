@@ -2,7 +2,7 @@
   "use strict";
 
   // 瀏覽器側 bridge client 內嵌於本守衛；Node localhost server 仍維持獨立檔案。
-  const BRIDGE_ENDPOINT = window.RF_PVP_BACKEND_ENDPOINT || "https://rfpvpanlyz-wgxynphd.manus.space/api/pvp/capture";
+  const BRIDGE_ENDPOINT = window.RF_PVP_BACKEND_ENDPOINT || "https://rf-pvp-analyzer-api.chengyen1209.workers.dev/api/pvp/capture";
   const LOCAL_BRIDGE_ENDPOINT = "http://127.0.0.1:8787/v1/capture";
   const BRIDGE_ALLOWED_KEYS = [
     "battleAt", "mode", "outcome", "playerTeam", "opponentTeam", "playerName", "playerUnion", "opponentName", "opponentUnion",
@@ -38,6 +38,11 @@
       if (endpoint.endsWith("/v1/capture")) return endpoint.slice(0, -"/v1/capture".length) + "/health";
       return endpoint.replace(/\/$/, "") + "/health";
     };
+    const getWriteSecret = () => String(window.RF_PVP_WRITE_SECRET || "").trim();
+    const getWriteHeaders = () => {
+      const writeSecret = getWriteSecret();
+      return writeSecret ? { "X-RF-Write-Secret": writeSecret } : {};
+    };
     const setStatus = (status, message, error = "") => {
       bridgeStatus = status;
       bridgeStatusMessage = message;
@@ -50,12 +55,23 @@
     };
     const probeHealth = async () => {
       if (bridgeHeartbeatInFlight) return;
+      if (!getWriteSecret()) {
+        bridgeConsecutiveFailures += 1;
+        setStatus("reconnecting", "未設定 PVP 寫入密鑰：請檢查 TOOLS/rf_pvp_backend_config.js", "PVP_WRITE_SECRET not configured");
+        scheduleHeartbeat(BRIDGE_MAX_RETRY_MS);
+        return;
+      }
       bridgeHeartbeatInFlight = true;
       setStatus(bridgeConsecutiveFailures ? "reconnecting" : "connecting", bridgeConsecutiveFailures ? "重連中：正在確認網站後端" : "正在確認網站後端");
       const controller = new AbortController();
       const timeout = window.setTimeout(() => controller.abort(), BRIDGE_REQUEST_TIMEOUT_MS);
       try {
-        const response = await fetch(getHealthEndpoint(), { method: "GET", cache: "no-store", signal: controller.signal });
+        const response = await fetch(getHealthEndpoint(), {
+          method: "GET",
+          cache: "no-store",
+          headers: getWriteHeaders(),
+          signal: controller.signal,
+        });
         const result = await response.json().catch(() => ({}));
         if (!response.ok || result.ok !== true) throw new Error(result.error || `health HTTP ${response.status}`);
         bridgeLastHeartbeatAt = Date.now();
@@ -76,6 +92,10 @@
     };
     const sendMatch = async (summary) => {
       const endpoint = window.RF_PVP_BACKEND_ENDPOINT || BRIDGE_ENDPOINT;
+      if (!getWriteSecret()) {
+        setStatus("reconnecting", "未設定 PVP 寫入密鑰：無法上傳戰績", "PVP_WRITE_SECRET not configured");
+        throw new Error("PVP_WRITE_SECRET not configured");
+      }
       const requestBody = { type: "match", workspaceId: summary.workspaceId, data: sanitize(summary) };
       if (!window.RF_PVP_BACKEND_ENDPOINT && endpoint === LOCAL_BRIDGE_ENDPOINT) delete requestBody.workspaceId;
       const controller = new AbortController();
@@ -86,7 +106,7 @@
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...(window.RF_PVP_WRITE_SECRET ? { "X-RF-Write-Secret": String(window.RF_PVP_WRITE_SECRET) } : {}),
+            ...getWriteHeaders(),
           },
           body: JSON.stringify(requestBody),
           signal: controller.signal,

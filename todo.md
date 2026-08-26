@@ -1,5 +1,8 @@
 # Project TODO
 
+- [x] 修正 PVP 守衛在已收到 WebSocket 訊框時未轉交新訊框、未辨識戰鬥且未同步到 Worker 的問題，驗證 endpoint、寫入密鑰與 hook 生命週期。
+- [ ] 在遊戲端更新 PVP 守衛後，完成一次 5v5 並確認 mod health heartbeat、完整戰績上傳與 Worker events 均成功。
+
 - [x] 修正 Cloudflare Worker 登入成功後 session cookie 未被後續 `/api/pvp/session`、`/api/pvp/health` 驗證的 401 問題，並驗證跨 GitHub Pages origin 的 credentialed CORS。
 - [ ] 在使用者實際 GitHub Pages 瀏覽器完成一次重新登入後，驗證 `/api/pvp/session` 與 `/api/pvp/health` 不再回傳 401，並確認分割 session cookie 被瀏覽器接受。
 
