@@ -277,4 +277,4 @@
 - [ ] 修正 GitHub Pages 遠端 Worker API key 輸入欄位不可見或未送出造成 401 的問題，確認 header 正確傳送；只推送 GitHub，不更新 Manus 受管網站。
 - [ ] 整理公開讀取模式下 Pages／Worker 的檔案與設定變更，並比較 Cloudflare Access 與 Worker 端密碼登入的 workspace 保護方案；目前不修改或推送。
 - [x] 恢復 A 強安全模式：health／capture／events 全部要求 API key，確認 CORS 與最小 health 回應維持不變；只推送 GitHub。
-- [ ] 將網站登入改為自訂密碼 session，將 mod 寫入驗證改為獨立 `PVP_WRITE_SECRET`，依登入身分隔離 workspace；只推送 GitHub，不更新 Manus 受管網站。
+- [x] 將網站登入改為自訂密碼 session，將 mod 寫入驗證改為獨立 `PVP_WRITE_SECRET`，依登入身分隔離 workspace；只推送 GitHub，不更新 Manus 受管網站。
