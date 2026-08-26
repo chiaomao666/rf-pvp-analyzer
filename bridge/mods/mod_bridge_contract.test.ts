@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const read = (name: string) => readFileSync(new URL(`./${name}`, import.meta.url), "utf8");
-const readTool = (name: string) => readFileSync(new URL(`./TOOLS/${name}`, import.meta.url), "utf8");
+const readMod = (name: string) => readFileSync(new URL(`./${name}`, import.meta.url), "utf8");
 
 describe("approved PVP mod bridge contract", () => {
   it("loads the self-contained PVP guard without a separate bridge client", () => {
@@ -10,8 +10,8 @@ describe("approved PVP mod bridge contract", () => {
     const guard = read("pvp_double_match_guard.js");
     expect(loader).not.toContain('src: "./mods/rf_bridge_client.js"');
     expect(loader).not.toContain("全局記憶體優化器");
-    expect(loader).toContain('src: "./mods/TOOLS/rf_pvp_backend_config.js"');
-    expect(loader.indexOf('src: "./mods/TOOLS/rf_pvp_backend_config.js"')).toBeLessThan(loader.indexOf('src: "./mods/pvp_double_match_guard.js"'));
+    expect(loader).toContain('src: "./mods/rf_pvp_backend_config.js"');
+    expect(loader.indexOf('src: "./mods/rf_pvp_backend_config.js"')).toBeLessThan(loader.indexOf('src: "./mods/pvp_double_match_guard.js"'));
     expect(loader).toContain('src: "./mods/pvp_double_match_guard.js"');
     expect(loader).toContain('async function loadEnabledTools()');
     expect(loader).toContain('await injectScript(tool)');
@@ -36,7 +36,7 @@ describe("approved PVP mod bridge contract", () => {
   });
 
   it("provides a configurable Worker endpoint without embedding a real credential", () => {
-    const config = readTool("rf_pvp_backend_config.js");
+    const config = readMod("rf_pvp_backend_config.js");
     expect(config).toContain("/api/pvp/capture");
     expect(config).toContain("PASTE_YOUR_PVP_WRITE_SECRET_HERE");
     expect(config).not.toMatch(/sk_live|Bearer\s+[A-Za-z0-9._-]{20,}/i);

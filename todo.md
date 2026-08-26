@@ -1,5 +1,8 @@
 # Project TODO
 
+- [x] 將固定本機 mod 根目錄 `assets/mods/` 納入載入器、PVP 守衛、文件與錯誤提示規格；設定檔固定為 `assets/mods/rf_pvp_backend_config.js`，不得再假設或提示 `TOOLS/` 子目錄。
+- [ ] 在使用者本機以固定 `assets/mods/` 配置替換載入器、守衛與設定檔後，確認守衛顯示正確的寫入密鑰狀態與 heartbeat。
+
 - [x] 將 PVP 守衛的複製同步診斷整合 bridge 狀態、寫入密鑰安全判讀與最近 heartbeat 結果，不顯示任何密鑰內容。
 - [ ] 在遊戲端更新 v15 守衛後，以「複製同步診斷」確認 bridge 寫入密鑰狀態與 heartbeat 回應。
 

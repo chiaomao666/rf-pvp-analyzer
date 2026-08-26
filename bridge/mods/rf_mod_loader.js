@@ -1,13 +1,13 @@
 // loader.js - 統一管理所有小工具的載入
-// index.html 只需要掛這一支，其他工具都寫在下面的 TOOLS 清單裡集中管理
+// assets/index.html 只需要掛這一支；所有 mod 檔案固定放在 assets/mods/。
 console.log("[LOADER] 小工具載入器啟動");
 
 (function(){
     // ---- 在這裡集中管理所有小工具 ----
     const TOOLS = [
-        // 必須最先載入，讓 pvp_double_match_guard.js 初始化前取得 Worker endpoint 與 API key。
+        // 固定位置：assets/mods/rf_pvp_backend_config.js；必須最先載入，讓守衛初始化前取得 Worker 設定。
         { id: "RF PVP Worker 連線設定",
-            src: "./mods/TOOLS/rf_pvp_backend_config.js",
+            src: "./mods/rf_pvp_backend_config.js",
             css: null,
             enabled: true
         },

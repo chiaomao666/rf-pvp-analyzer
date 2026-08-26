@@ -67,7 +67,7 @@
       if (!getWriteSecret()) {
         bridgeConsecutiveFailures += 1;
         const writeSecretState = getWriteSecretState();
-        setStatus("reconnecting", `PVP 寫入密鑰：${writeSecretState}；請檢查 TOOLS/rf_pvp_backend_config.js`, "PVP_WRITE_SECRET not configured");
+        setStatus("reconnecting", `PVP 寫入密鑰：${writeSecretState}；請檢查 assets/mods/rf_pvp_backend_config.js`, "PVP_WRITE_SECRET not configured");
         scheduleHeartbeat(BRIDGE_MAX_RETRY_MS);
         return;
       }
