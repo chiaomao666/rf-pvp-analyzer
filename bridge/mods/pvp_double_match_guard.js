@@ -376,7 +376,9 @@
     if (!root?.querySelectorAll) return "";
     const nodes = [];
     if (root.nodeType === 1 && hasClassPrefix(root, prefix)) nodes.push(root);
-    nodes.push(...root.querySelectorAll("div"));
+    // AniDoor title2 的實際節點可能是 div、span 或 React 產生的其他元素；
+    // 只掃目前戰鬥 root，並由 debounce 控制頻率，避免全頁高頻查詢。
+    nodes.push(...root.querySelectorAll("*"));
     const element = nodes.find((node) => hasClassPrefix(node, prefix));
     return element?.textContent?.trim().replace(/\s+/g, " ").slice(0, 120) || "";
   }
@@ -840,67 +842,6 @@
     }
   }
 
-  function formatLocalExportTime(date) {
-    const pad = (value) => String(value).padStart(2, "0");
-    const offsetMinutes = -date.getTimezoneOffset();
-    const offsetSign = offsetMinutes >= 0 ? "+" : "-";
-    const offsetAbsolute = Math.abs(offsetMinutes);
-    const offsetHours = Math.floor(offsetAbsolute / 60);
-    const offsetRemainder = offsetAbsolute % 60;
-    const localIso = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${String(date.getMilliseconds()).padStart(3, "0")}${offsetSign}${pad(offsetHours)}:${pad(offsetRemainder)}`;
-    const filenameTime = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}_UTC${offsetSign}${pad(offsetHours)}-${pad(offsetRemainder)}`;
-    return { localIso, filenameTime, offsetMinutes };
-  }
-
-  function buildAnalyzerExport(generatedAt = new Date()) {
-    const rawEvents = readArray(EVENT_KEY);
-    const records = uniqueAnalyzerRecords(analyzerEventPool(rawEvents));
-    const localExportTime = formatLocalExportTime(generatedAt);
-    return {
-      format: "rf-pvp-analyzer/v1",
-      exportedAt: generatedAt.toISOString(),
-      exportedAtLocal: localExportTime.localIso,
-      exportTimezoneOffsetMinutes: localExportTime.offsetMinutes,
-      source: MOD_NAME,
-      guardVersion: 11,
-      records,
-      rawEvents,
-      guardLogs: readArray(LOG_KEY),
-      exportDiagnostics: {
-        capturedEventCount: rawEvents.length,
-        captureStats: readCaptureStats(),
-        capturedSinceLoad,
-        recognisedMatchCount: records.length,
-        aggregation: "matched player channel + initial battle snapshot + terminal medals snapshot + official player medals result",
-        rawDataRetained: true,
-      },
-      notes: [
-        "真實 PVP 紀錄會把配對、初始狀態與 medals 終局角色快照跨訊框聚合；只有三段證據齊全才會建立 records 項目。",
-        "mode 是遊戲的 PVP 模式標籤，不是此封包中角色快照的人數；完整雙方陣容會原樣保留。",
-        "結果頁若收到官方 player-channel medals 回應，會以該回應的 score 前後差判定勝負，並保存其 rank 前後值；未收到時 outcome 保持 unknown。",
-        "其餘 PVP 封包保留在 rawEvents；分析站會保存整份原始 JSON，但不會將缺少證據的資料虛構成戰績。",
-        "battleAt 為瀏覽器收到 matched 訊框的本機時間，並非伺服器時間戳。",
-      ],
-    };
-  }
-
-  function downloadAnalyzerExport() {
-    const generatedAt = new Date();
-    const bundle = buildAnalyzerExport(generatedAt);
-    const fileContents = JSON.stringify(bundle, null, 2);
-    const blob = new Blob([fileContents], { type: "application/json;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `rf-pvp-analyzer-${formatLocalExportTime(generatedAt).filenameTime}.json`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-    console.log(`[${MOD_NAME}] 已建立分析站匯出資料：`, bundle);
-    return bundle;
-  }
-
   function attachTransportTap(reason = "initial") {
     const tap = window.__RF_PVP_SOCKET_TAP__;
     if (!tap || typeof tap.subscribe !== "function") {
@@ -948,7 +889,7 @@
     const body = document.createElement("div");
     body.id = "rf-pvp-guard-body";
     body.style.padding = "10px";
-    body.innerHTML = "<div id='rf-pvp-status' style='margin-bottom:6px;color:#00ff00'>狀態：待機中</div><div id='rf-pvp-bridge' style='margin-bottom:6px;color:#ffcc00;font-size:10px;line-height:1.35'>後端：連線確認中</div><div id='rf-pvp-transport' style='margin-bottom:6px;color:#ffcc00;font-size:10px;line-height:1.35'>傳輸：初始化中</div><div id='rf-pvp-capture-count' style='margin-bottom:3px;color:#9fc4ff'>PVP 快取：0 / 160</div><div id='rf-pvp-capture-detail' style='margin-bottom:8px;color:#aab;font-size:10px;line-height:1.35'>尚未收到 PVP 候選封包</div><div style='border-top:1px solid #444;padding-top:8px'><div style='margin-bottom:5px;color:#8fd3ff'>可匯出戰績：</div><div id='rf-pvp-record-summary' style='background:#111;padding:5px;font-size:10px;line-height:1.45;border-radius:4px'>尚未收集到完整戰鬥</div></div><div style='border-top:1px solid #444;margin-top:8px;padding-top:8px'><div style='margin-bottom:5px;color:#aaa'>攔截異常日誌：</div><div id='rf-pvp-logs' style='max-height:90px;overflow-y:auto;background:#111;padding:5px;font-size:10px;border-radius:4px'>無記錄</div></div><button id='rf-pvp-export-btn' style='width:100%;margin-top:10px;padding:6px;background:#1769aa;color:white;border:1px solid #5bc0eb;border-radius:4px;cursor:pointer'>下載分析站 JSON</button><button id='rf-pvp-copy-btn' style='width:100%;margin-top:6px;padding:5px;background:#444;color:white;border:none;border-radius:4px;cursor:pointer'>複製安全診斷摘要</button>";
+    body.innerHTML = "<div id='rf-pvp-status' style='margin-bottom:6px;color:#00ff00'>狀態：待機中</div><div id='rf-pvp-bridge' style='margin-bottom:6px;color:#ffcc00;font-size:10px;line-height:1.35'>後端：連線確認中</div><div id='rf-pvp-transport' style='margin-bottom:6px;color:#ffcc00;font-size:10px;line-height:1.35'>傳輸：初始化中</div><div id='rf-pvp-capture-count' style='margin-bottom:3px;color:#9fc4ff'>PVP 快取：0 / 160</div><div id='rf-pvp-capture-detail' style='margin-bottom:8px;color:#aab;font-size:10px;line-height:1.35'>尚未收到 PVP 候選封包</div><div style='border-top:1px solid #444;padding-top:8px'><div style='margin-bottom:5px;color:#8fd3ff'>已辨識戰績：</div><div id='rf-pvp-record-summary' style='background:#111;padding:5px;font-size:10px;line-height:1.45;border-radius:4px'>尚未收集到完整戰鬥</div></div><div style='border-top:1px solid #444;margin-top:8px;padding-top:8px'><div style='margin-bottom:5px;color:#aaa'>攔截異常日誌：</div><div id='rf-pvp-logs' style='max-height:90px;overflow-y:auto;background:#111;padding:5px;font-size:10px;border-radius:4px'>無記錄</div></div><button id='rf-pvp-copy-btn' style='width:100%;margin-top:10px;padding:5px;background:#444;color:white;border:none;border-radius:4px;cursor:pointer'>複製同步診斷</button>";
 
     uiPanel.append(header, body);
     document.body.appendChild(uiPanel);
@@ -1007,7 +948,6 @@
       body.style.display = isMinimised ? "block" : "none";
       document.getElementById("rf-pvp-min-btn").innerText = isMinimised ? "[－]" : "[＋]";
     };
-    document.getElementById("rf-pvp-export-btn").onclick = downloadAnalyzerExport;
     document.getElementById("rf-pvp-copy-btn").onclick = async () => {
       const diagnostics = {
         guardVersion: 12,
@@ -1090,8 +1030,6 @@
     getCapturedEvents: () => readArray(EVENT_KEY),
     getAnalyzerRecords: () => uniqueAnalyzerRecords(analyzerEventPool(readArray(EVENT_KEY))),
     getCaptureDiagnostics: () => ({ captureStats: readCaptureStats(), capturedSinceLoad, transport: window.__RF_PVP_SOCKET_TAP__?.getStatus?.() || null }),
-    buildAnalyzerExport,
-    downloadAnalyzerExport,
     clearCapturedEvents: () => writeArray(EVENT_KEY, []),
       getTransportStatus: () => window.__RF_PVP_SOCKET_TAP__?.getStatus?.() || { attached: false, message: transportMessage },
     getBridgeStatus: () => window.RFLocalBridge?.getStatus?.() || { status: "unavailable", message: "未安裝 bridge client" },

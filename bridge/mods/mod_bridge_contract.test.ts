@@ -52,6 +52,7 @@ describe("approved PVP mod bridge contract", () => {
     expect(guard).toContain("opponentUnion");
     expect(guard).toContain("installAniDoorCapture");
     expect(guard).toContain("identitySignature");
+    expect(guard).toContain('root.querySelectorAll("*")');
   });
 
   it("accepts current player medals even when previous_record is absent", () => {
@@ -68,6 +69,14 @@ describe("approved PVP mod bridge contract", () => {
     expect(guard).toContain("activeBattleEvents");
     expect(guard).toContain("analyzerEventPool");
     expect(guard).toContain("uniqueAnalyzerRecords(analyzerEventPool(events))");
+  });
+
+  it("removes the obsolete JSON export button and renames sync diagnostics", () => {
+    const guard = read("pvp_double_match_guard.js");
+    expect(guard).not.toContain("rf-pvp-export-btn");
+    expect(guard).not.toContain("下載分析站 JSON");
+    expect(guard).not.toContain("downloadAnalyzerExport");
+    expect(guard).toContain("複製同步診斷");
   });
 
   it("keeps credentials and raw frames out of the embedded bridge client", () => {

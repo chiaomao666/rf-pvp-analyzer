@@ -253,3 +253,16 @@
 - [x] 提供更新後的 `bridge/mods/pvp_double_match_guard.js` 檔案給使用者。
 - [x] 將 fc75d7a0 後的 PVP 漏記修正提交並推送至 `chiaomao666/rf-pvp-analyzer` main。
 - [x] 核對 GitHub main commit 與 Pages／Worker workflow 狀態。
+
+- [x] 核對 PVP 守衛面板中的擷取異常日誌、JSON 下載與診斷摘要按鈕是否仍有實際用途。
+- [x] 移除無效的 JSON／舊日誌入口，保留必要的錯誤診斷與同步狀態資訊。
+- [x] 測試並將面板清理修正推送至 GitHub。
+
+- [x] 移除 PVP 守衛面板的 JSON 下載按鈕，將診斷摘要按鈕改名為「複製同步診斷」。
+- [x] 核對並修復 Worker endpoint、API key、CORS 或重連設定造成的無法連線問題。
+- [x] 測試、推送並附上更新後的 `pvp_double_match_guard.js` 檔案。
+
+- [x] 移除 PVP 守衛面板的「下載分析站 JSON」按鈕。
+- [x] 將「複製安全診斷摘要」改名為「複製同步診斷」。
+- [x] 從戰鬥畫面第一張角色圖片上方名稱擷取我方／對手組織名稱並補送戰績。
+- [x] 新增組織名稱與面板按鈕的回歸測試，提供 mod 檔案並推送 GitHub。
