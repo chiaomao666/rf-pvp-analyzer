@@ -254,14 +254,23 @@ console.log("[LOADER] 小工具載入器啟動");
     }
 
     function injectScript(tool){
-        if (!tool.src) return;
-        const s = document.createElement("script");
-        s.src = tool.src + "?v=" + Date.now();
-        s.async = false;
-        s.defer = true;
-        s.dataset.uwTool = tool.id;
-        document.head.appendChild(s);
-        console.log("[LOADER] 載入 JS：" + tool.id);
+        if (!tool.src) return Promise.resolve();
+        return new Promise((resolve) => {
+            const s = document.createElement("script");
+            s.src = tool.src + "?v=" + Date.now();
+            s.async = false;
+            s.dataset.uwTool = tool.id;
+            s.onload = () => {
+                console.log("[LOADER] 已載入 JS：" + tool.id);
+                resolve();
+            };
+            s.onerror = () => {
+                console.error("[LOADER] 載入 JS 失敗：" + tool.id + "（" + s.src + "）");
+                resolve();
+            };
+            document.head.appendChild(s);
+            console.log("[LOADER] 載入 JS：" + tool.id);
+        });
     }
 
     function injectStyle(tool){
@@ -274,13 +283,18 @@ console.log("[LOADER] 小工具載入器啟動");
         console.log("[LOADER] 載入 CSS：" + tool.id);
     }
 
-    function loadEnabledTools(){
+    async function loadEnabledTools(){
         const cfg = loadConfig();
-        TOOLS.forEach(tool => {
-            if (!isEnabled(tool, cfg)) return;
+        const pvpPriorityIds = new Set(["RF PVP Worker 連線設定", "排名戰重複配對攔截"]);
+        const orderedTools = [
+            ...TOOLS.filter((tool) => pvpPriorityIds.has(tool.id)),
+            ...TOOLS.filter((tool) => !pvpPriorityIds.has(tool.id)),
+        ];
+        for (const tool of orderedTools) {
+            if (!isEnabled(tool, cfg)) continue;
             if (tool.css) injectStyle(tool);
-            if (tool.src) injectScript(tool);
-        });
+            if (tool.src) await injectScript(tool);
+        }
     }
 
     function buildPanel(){
@@ -383,7 +397,7 @@ console.log("[LOADER] 小工具載入器啟動");
     const initialConfig = loadConfig();
     const pvpGuardTool = TOOLS.find(tool => tool.id === "排名戰重複配對攔截");
     if (pvpGuardTool && isEnabled(pvpGuardTool, initialConfig)) installPvpSocketTap();
-    loadEnabledTools();
+    void loadEnabledTools();
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", buildPanel);
     } else {

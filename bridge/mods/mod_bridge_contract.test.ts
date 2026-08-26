@@ -13,6 +13,9 @@ describe("approved PVP mod bridge contract", () => {
     expect(loader).toContain('src: "./mods/TOOLS/rf_pvp_backend_config.js"');
     expect(loader.indexOf('src: "./mods/TOOLS/rf_pvp_backend_config.js"')).toBeLessThan(loader.indexOf('src: "./mods/pvp_double_match_guard.js"'));
     expect(loader).toContain('src: "./mods/pvp_double_match_guard.js"');
+    expect(loader).toContain('async function loadEnabledTools()');
+    expect(loader).toContain('await injectScript(tool)');
+    expect(loader).toContain('const pvpPriorityIds = new Set');
     expect(guard).toContain("installEmbeddedBridgeClient");
     expect(guard).toContain('body: JSON.stringify(requestBody)');
     expect(guard).toContain('BRIDGE_HEARTBEAT_MS = 30_000');
@@ -24,7 +27,8 @@ describe("approved PVP mod bridge contract", () => {
     expect(guard).toContain('window.RF_PVP_BACKEND_ENDPOINT');
     expect(guard).toContain('X-RF-Write-Secret');
     expect(guard).toContain('headers: getWriteHeaders()');
-    expect(guard).toContain('未設定 PVP 寫入密鑰');
+    expect(guard).toContain('設定檔未載入或載入順序錯誤');
+    expect(guard).toContain('設定檔已載入，但密鑰是空白或 placeholder');
     expect(guard).toContain('PVP_WRITE_SECRET not configured');
     expect(guard).toContain('workspaceId: String(record.sourcePlayerUserId');
   });

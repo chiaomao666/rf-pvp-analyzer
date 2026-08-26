@@ -38,7 +38,16 @@
       if (endpoint.endsWith("/v1/capture")) return endpoint.slice(0, -"/v1/capture".length) + "/health";
       return endpoint.replace(/\/$/, "") + "/health";
     };
-    const getWriteSecret = () => String(window.RF_PVP_WRITE_SECRET || "").trim();
+    const getWriteSecretState = () => {
+      if (!Object.prototype.hasOwnProperty.call(window, "RF_PVP_WRITE_SECRET")) {
+        return "設定檔未載入或載入順序錯誤";
+      }
+      if (typeof window.RF_PVP_WRITE_SECRET !== "string") {
+        return "設定檔的寫入密鑰格式不正確";
+      }
+      return window.RF_PVP_WRITE_SECRET.trim() ? "已設定" : "設定檔已載入，但密鑰是空白或 placeholder";
+    };
+    const getWriteSecret = () => typeof window.RF_PVP_WRITE_SECRET === "string" ? window.RF_PVP_WRITE_SECRET.trim() : "";
     const getWriteHeaders = () => {
       const writeSecret = getWriteSecret();
       return writeSecret ? { "X-RF-Write-Secret": writeSecret } : {};
@@ -57,7 +66,8 @@
       if (bridgeHeartbeatInFlight) return;
       if (!getWriteSecret()) {
         bridgeConsecutiveFailures += 1;
-        setStatus("reconnecting", "未設定 PVP 寫入密鑰：請檢查 TOOLS/rf_pvp_backend_config.js", "PVP_WRITE_SECRET not configured");
+        const writeSecretState = getWriteSecretState();
+        setStatus("reconnecting", `PVP 寫入密鑰：${writeSecretState}；請檢查 TOOLS/rf_pvp_backend_config.js`, "PVP_WRITE_SECRET not configured");
         scheduleHeartbeat(BRIDGE_MAX_RETRY_MS);
         return;
       }
@@ -93,7 +103,7 @@
     const sendMatch = async (summary) => {
       const endpoint = window.RF_PVP_BACKEND_ENDPOINT || BRIDGE_ENDPOINT;
       if (!getWriteSecret()) {
-        setStatus("reconnecting", "未設定 PVP 寫入密鑰：無法上傳戰績", "PVP_WRITE_SECRET not configured");
+        setStatus("reconnecting", `PVP 寫入密鑰：${getWriteSecretState()}；無法上傳戰績`, "PVP_WRITE_SECRET not configured");
         throw new Error("PVP_WRITE_SECRET not configured");
       }
       const requestBody = { type: "match", workspaceId: summary.workspaceId, data: sanitize(summary) };
@@ -137,6 +147,7 @@
       lastSuccessAt: bridgeLastSuccessAt || null,
       consecutiveFailures: bridgeConsecutiveFailures,
       lastError: bridgeLastError || null,
+      writeSecretState: getWriteSecretState(),
     });
     window.RFLocalBridge = Object.freeze({ sendMatch, probeHealth, getStatus, endpoint: BRIDGE_ENDPOINT });
     console.log(`[RF bridge] embedded client ready; status=connecting; endpoint=${BRIDGE_ENDPOINT}`);
@@ -1023,7 +1034,7 @@
     };
     document.getElementById("rf-pvp-copy-btn").onclick = async () => {
       const diagnostics = {
-        guardVersion: 13,
+        guardVersion: 14,
         transport: window.__RF_PVP_SOCKET_TAP__?.getStatus?.() || { attached: false, message: transportMessage },
         captureStats: readCaptureStats(),
         capturedSinceLoad,
@@ -1119,5 +1130,5 @@
   if (document.readyState === "complete") createUIPanel();
   else window.addEventListener("load", createUIPanel, { once: true });
   attachTransportTap();
-  console.log(`[${MOD_NAME}] v13 已載入；health heartbeat 與戰績上傳都會使用 PVP 寫入密鑰，並以 30 秒心跳與退避重連維持閒置復原。僅被動保存 PVP 封包及安全分類摘要，不會攔截 Phoenix 或改寫官方訊框。`);
+  console.log(`[${MOD_NAME}] v14 已載入；會安全顯示寫入密鑰為未載入、空白或已設定，且 health heartbeat 與戰績上傳都使用同一組密鑰。僅被動保存 PVP 封包及安全分類摘要，不會攔截 Phoenix 或改寫官方訊框。`);
 })();
