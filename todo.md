@@ -233,4 +233,4 @@
 - [x] 更新 Worker 與 IndexedDB parser 的玩家／組織欄位及晚到身份更新。
 - [x] 以回歸測試、正式建置與端到端 smoke test 驗證身份同步，並推送 GitHub。
 
-- [ ] 核對 a48ec5f5 是否已推送至 chiaomao666/rf-pvp-analyzer，若未推送則完成提交與推送並驗證 Actions。
+- [x] 核對 a48ec5f5 是否已推送至 chiaomao666/rf-pvp-analyzer，若未推送則完成提交與推送並驗證 Actions。
