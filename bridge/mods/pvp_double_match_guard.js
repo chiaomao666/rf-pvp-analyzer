@@ -1032,10 +1032,23 @@
       body.style.display = isMinimised ? "block" : "none";
       document.getElementById("rf-pvp-min-btn").innerText = isMinimised ? "[－]" : "[＋]";
     };
+    const getSafeBridgeDiagnostics = () => {
+      const bridge = window.RFLocalBridge?.getStatus?.() || {};
+      return {
+        status: bridge.status || "unavailable",
+        message: bridge.message || "未安裝 bridge client",
+        writeSecretState: bridge.writeSecretState || "未知",
+        lastHeartbeatAt: bridge.lastHeartbeatAt || null,
+        lastSuccessAt: bridge.lastSuccessAt || null,
+        consecutiveFailures: Number(bridge.consecutiveFailures || 0),
+        lastError: bridge.lastError || null,
+      };
+    };
     document.getElementById("rf-pvp-copy-btn").onclick = async () => {
       const diagnostics = {
-        guardVersion: 14,
+        guardVersion: 15,
         transport: window.__RF_PVP_SOCKET_TAP__?.getStatus?.() || { attached: false, message: transportMessage },
+        bridge: getSafeBridgeDiagnostics(),
         captureStats: readCaptureStats(),
         capturedSinceLoad,
         recognisedMatchCount: uniqueAnalyzerRecords(analyzerEventPool(readArray(EVENT_KEY))).length,
@@ -1113,7 +1126,24 @@
     getLogs: () => readArray(LOG_KEY),
     getCapturedEvents: () => readArray(EVENT_KEY),
     getAnalyzerRecords: () => uniqueAnalyzerRecords(analyzerEventPool(readArray(EVENT_KEY))),
-    getCaptureDiagnostics: () => ({ captureStats: readCaptureStats(), capturedSinceLoad, transport: window.__RF_PVP_SOCKET_TAP__?.getStatus?.() || null }),
+    getCaptureDiagnostics: () => ({
+      guardVersion: 15,
+      captureStats: readCaptureStats(),
+      capturedSinceLoad,
+      transport: window.__RF_PVP_SOCKET_TAP__?.getStatus?.() || null,
+      bridge: (() => {
+        const bridge = window.RFLocalBridge?.getStatus?.() || {};
+        return {
+          status: bridge.status || "unavailable",
+          message: bridge.message || "未安裝 bridge client",
+          writeSecretState: bridge.writeSecretState || "未知",
+          lastHeartbeatAt: bridge.lastHeartbeatAt || null,
+          lastSuccessAt: bridge.lastSuccessAt || null,
+          consecutiveFailures: Number(bridge.consecutiveFailures || 0),
+          lastError: bridge.lastError || null,
+        };
+      })(),
+    }),
     clearCapturedEvents: () => writeArray(EVENT_KEY, []),
       getTransportStatus: () => window.__RF_PVP_SOCKET_TAP__?.getStatus?.() || { attached: false, message: transportMessage },
     getBridgeStatus: () => window.RFLocalBridge?.getStatus?.() || { status: "unavailable", message: "未安裝 bridge client" },

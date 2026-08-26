@@ -30,6 +30,8 @@ describe("approved PVP mod bridge contract", () => {
     expect(guard).toContain('設定檔未載入或載入順序錯誤');
     expect(guard).toContain('設定檔已載入，但密鑰是空白或 placeholder');
     expect(guard).toContain('PVP_WRITE_SECRET not configured');
+    expect(guard).toContain('writeSecretState: bridge.writeSecretState || "未知"');
+    expect(guard).toContain('bridge: getSafeBridgeDiagnostics()');
     expect(guard).toContain('workspaceId: String(record.sourcePlayerUserId');
   });
 
