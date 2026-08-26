@@ -62,13 +62,18 @@ function setRemoteSiteSessionActive(active: boolean) {
 export async function loginRemoteSite(password: string) {
   if (!remoteBridgeOrigin()) throw new Error("尚未設定網站後端網址");
   const response = await request(remoteEndpoint("/api/pvp/login"), { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ password }) });
-  if (!response.ok) throw new Error(response.status === 401 ? "網站密碼錯誤" : `網站登入 HTTP ${response.status}`);
+  if (!response.ok) {
+    console.warn("[RF PVP] 網站登入失敗", { status: response.status, at: new Date().toISOString() });
+    throw new Error(response.status === 401 ? "網站密碼錯誤" : `網站登入 HTTP ${response.status}`);
+  }
   setRemoteSiteSessionActive(true);
+  console.info("[RF PVP] 網站登入成功，HttpOnly session 已建立", { at: new Date().toISOString() });
   return true;
 }
 export async function logoutRemoteSite() {
   if (remoteBridgeOrigin()) await request(remoteEndpoint("/api/pvp/logout"), { method: "POST", headers: remoteHeaders() }).catch(() => undefined);
   setRemoteSiteSessionActive(false);
+  console.info("[RF PVP] 網站已登出，session 已清除", { at: new Date().toISOString() });
 }
 export async function checkRemoteSiteSession() {
   if (!remoteBridgeOrigin()) return false;
