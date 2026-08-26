@@ -1023,7 +1023,7 @@
     };
     document.getElementById("rf-pvp-copy-btn").onclick = async () => {
       const diagnostics = {
-        guardVersion: 12,
+        guardVersion: 13,
         transport: window.__RF_PVP_SOCKET_TAP__?.getStatus?.() || { attached: false, message: transportMessage },
         captureStats: readCaptureStats(),
         capturedSinceLoad,
@@ -1119,5 +1119,5 @@
   if (document.readyState === "complete") createUIPanel();
   else window.addEventListener("load", createUIPanel, { once: true });
   attachTransportTap();
-  console.log(`[${MOD_NAME}] v12 已載入；後端狀態提供連線中／已連線／上傳中／重連中，並以 30 秒 health 心跳與退避重連維持閒置復原。僅被動保存 PVP 封包及安全分類摘要，不會攔截 Phoenix 或改寫官方訊框。`);
+  console.log(`[${MOD_NAME}] v13 已載入；health heartbeat 與戰績上傳都會使用 PVP 寫入密鑰，並以 30 秒心跳與退避重連維持閒置復原。僅被動保存 PVP 封包及安全分類摘要，不會攔截 Phoenix 或改寫官方訊框。`);
 })();
