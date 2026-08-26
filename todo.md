@@ -250,6 +250,6 @@
 - [x] 驗證結束封包、5v5 medals、去重鍵、Worker capture 與前端 events 讀回各階段。
 - [x] 修正漏記流程並新增對應回歸測試與公開版本驗證。
 
-- [ ] 提供更新後的 `bridge/mods/pvp_double_match_guard.js` 檔案給使用者。
-- [ ] 將 fc75d7a0 後的 PVP 漏記修正提交並推送至 `chiaomao666/rf-pvp-analyzer` main。
-- [ ] 核對 GitHub main commit 與 Pages／Worker workflow 狀態。
+- [x] 提供更新後的 `bridge/mods/pvp_double_match_guard.js` 檔案給使用者。
+- [x] 將 fc75d7a0 後的 PVP 漏記修正提交並推送至 `chiaomao666/rf-pvp-analyzer` main。
+- [x] 核對 GitHub main commit 與 Pages／Worker workflow 狀態。
