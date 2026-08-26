@@ -52,6 +52,9 @@ describe("approved PVP mod bridge contract", () => {
     expect(guard).toContain("opponentUnion");
     expect(guard).toContain("installAniDoorCapture");
     expect(guard).toContain("identitySignature");
+    expect(guard).toContain("battleIdentityByChannel");
+    expect(guard).toContain("rememberBattleIdentity(currentBattleChannel)");
+    expect(guard).toContain("identityForBattle(record.sourceBattleChannel)");
     expect(guard).toContain('root.querySelectorAll("*")');
   });
 

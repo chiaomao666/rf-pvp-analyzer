@@ -156,6 +156,8 @@
   let identityRoot = null;
   let identityDebounce = null;
   const activeBattleEvents = new Map();
+  // 身份 DOM 可能在 medals 回覆前卸載；按戰鬥 channel 保存最後一次完整快照，避免只依賴目前畫面。
+  const battleIdentityByChannel = new Map();
 
   function readArray(key) {
     try {
@@ -376,11 +378,26 @@
     if (!root?.querySelectorAll) return "";
     const nodes = [];
     if (root.nodeType === 1 && hasClassPrefix(root, prefix)) nodes.push(root);
-    // AniDoor title2 的實際節點可能是 div、span 或 React 產生的其他元素；
-    // 只掃目前戰鬥 root，並由 debounce 控制頻率，避免全頁高頻查詢。
+    // CSS Modules 的 class 可能是 AniDoor_leftTitle2__hash，也可能在不同建置中改成其他後綴；
+    // 同時使用 class prefix 與 class substring，避免只因 hash／分隔符差異而漏抓。
     nodes.push(...root.querySelectorAll("*"));
-    const element = nodes.find((node) => hasClassPrefix(node, prefix));
+    const element = nodes.find((node) => hasClassPrefix(node, prefix) || String(node.className || "").split(/\s+/).some((name) => name.includes(prefix.replace(/_$/, ""))));
     return element?.textContent?.trim().replace(/\s+/g, " ").slice(0, 120) || "";
+  }
+
+  function rememberBattleIdentity(channel = currentBattleChannel) {
+    if (!channel || !isBattleChannel(channel)) return;
+    const snapshot = Object.fromEntries(Object.entries(currentBattleIdentity).filter(([, value]) => typeof value === "string" && value.trim()).map(([key, value]) => [key, value.trim().slice(0, 120)]));
+    if (Object.keys(snapshot).length) battleIdentityByChannel.set(String(channel), snapshot);
+  }
+
+  function identityForBattle(channel) {
+    const channelKey = String(channel || "");
+    const saved = battleIdentityByChannel.get(channelKey) || {};
+    const current = channelKey === String(currentBattleChannel || "")
+      ? Object.fromEntries(Object.entries(currentBattleIdentity).filter(([, value]) => typeof value === "string" && value.trim()))
+      : {};
+    return { ...saved, ...current };
   }
 
   function readBattleIdentity(root = identityRoot || document) {
@@ -388,6 +405,7 @@
     const changed = Object.keys(ANI_IDENTITY_PREFIXES).some((key) => next[key] !== currentBattleIdentity[key]);
     if (!changed || (!next.playerName && !next.opponentName)) return false;
     currentBattleIdentity = { ...currentBattleIdentity, ...next };
+    rememberBattleIdentity();
     console.log(`[${MOD_NAME}] 已擷取 AniDoor 身份：`, currentBattleIdentity);
     updateUIPanel();
     forwardNewRecordsToBridge(uniqueAnalyzerRecords(analyzerEventPool(readArray(EVENT_KEY))));
@@ -439,6 +457,7 @@
     if (isMatchFrame && status === "matched" && isBattleChannel(payload?.channel)) {
       isMatching = false;
       currentBattleChannel = payload.channel;
+      rememberBattleIdentity(currentBattleChannel);
     }
     if (isMatchFrame && (status === "error" || status === "can_join" || payload?.error)) {
       isMatching = false;
@@ -671,9 +690,10 @@
         resultEvidence: "official_player_medals",
         sourceResultMedalsTopic: resultEvent.capturedEvent.topic,
         sourceResultMedalsCapturedAt: resultEvent.capturedEvent.capturedAtIso,
-        ...(currentBattleIdentity.playerName ? { playerName: currentBattleIdentity.playerName } : {}),
-        ...(currentBattleIdentity.playerUnion ? { playerUnion: currentBattleIdentity.playerUnion } : {}),
-        ...(currentBattleIdentity.opponentUnion ? { opponentUnion: currentBattleIdentity.opponentUnion } : {}),
+        ...(identityForBattle(record.sourceBattleChannel).playerName ? { playerName: identityForBattle(record.sourceBattleChannel).playerName } : {}),
+        ...(identityForBattle(record.sourceBattleChannel).playerUnion ? { playerUnion: identityForBattle(record.sourceBattleChannel).playerUnion } : {}),
+        ...(identityForBattle(record.sourceBattleChannel).opponentName ? { opponentName: identityForBattle(record.sourceBattleChannel).opponentName } : {}),
+        ...(identityForBattle(record.sourceBattleChannel).opponentUnion ? { opponentUnion: identityForBattle(record.sourceBattleChannel).opponentUnion } : {}),
         rawEvent: {
           ...record.rawEvent,
           resultMedals: redactAndClone(resultEvent.response),
@@ -734,6 +754,7 @@
       const player = iamDefender ? defender : offender;
       const opponent = iamDefender ? offender : defender;
       const battleId = firstValue(initial.payload, ["id", "battle_id"]) || channel.split(":")[1];
+      const battleIdentity = identityForBattle(channel);
       records.push({
         battleAt: Number(matched.capturedEvent.capturedAt || initial.capturedEvent.capturedAt || Date.now()),
         mode,
@@ -742,10 +763,10 @@
         opponentTeam,
         ...(typeof player?.name === "string" && player.name.trim() ? { playerName: player.name.trim() } : {}),
         ...(typeof opponent?.name === "string" && opponent.name.trim() ? { opponentName: opponent.name.trim() } : {}),
-        ...(currentBattleIdentity.playerName ? { playerName: currentBattleIdentity.playerName } : {}),
-        ...(currentBattleIdentity.playerUnion ? { playerUnion: currentBattleIdentity.playerUnion } : {}),
-        ...(currentBattleIdentity.opponentName ? { opponentName: currentBattleIdentity.opponentName } : {}),
-        ...(currentBattleIdentity.opponentUnion ? { opponentUnion: currentBattleIdentity.opponentUnion } : {}),
+        ...(battleIdentity.playerName ? { playerName: battleIdentity.playerName } : {}),
+        ...(battleIdentity.playerUnion ? { playerUnion: battleIdentity.playerUnion } : {}),
+        ...(battleIdentity.opponentName ? { opponentName: battleIdentity.opponentName } : {}),
+        ...(battleIdentity.opponentUnion ? { opponentUnion: battleIdentity.opponentUnion } : {}),
         sourceBattleChannel: channel,
         sourceBattleId: battleId,
         sourcePlayerTopic: matched.capturedEvent.topic,
