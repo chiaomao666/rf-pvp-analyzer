@@ -3,7 +3,7 @@ main = "src/index.mjs"
 compatibility_date = "2025-01-01"
 
 # Copy this file to wrangler.toml after replacing the placeholders.
-# Never commit real API keys or account identifiers that should remain private.
+# Never commit real secrets or account identifiers that should remain private.
 
 [[d1_databases]]
 binding = "DB"
@@ -14,4 +14,4 @@ migrations_dir = "migrations"
 [vars]
 # Comma-separated exact frontend origins. Add your GitHub Pages origin.
 ALLOWED_ORIGINS = "https://chiaomao666.github.io"
-# Set PVP_API_KEY with `wrangler secret put PVP_API_KEY`; do not put it here.
+# Set PVP_SITE_PASSWORD, PVP_SESSION_SECRET and PVP_WRITE_SECRET with `wrangler secret put`; do not put them here.

@@ -22,14 +22,14 @@ describe("approved PVP mod bridge contract", () => {
     expect(guard).toContain('BRIDGE_MAX_RETRY_MS');
     expect(guard).not.toContain('setInterval');
     expect(guard).toContain('window.RF_PVP_BACKEND_ENDPOINT');
-    expect(guard).toContain('X-RF-API-Key');
+    expect(guard).toContain('X-RF-Write-Secret');
     expect(guard).toContain('workspaceId: String(record.sourcePlayerUserId');
   });
 
   it("provides a configurable Worker endpoint without embedding a real credential", () => {
     const config = readTool("rf_pvp_backend_config.js");
     expect(config).toContain("/api/pvp/capture");
-    expect(config).toContain("PASTE_YOUR_PVP_API_KEY_HERE");
+    expect(config).toContain("PASTE_YOUR_PVP_WRITE_SECRET_HERE");
     expect(config).not.toMatch(/sk_live|Bearer\s+[A-Za-z0-9._-]{20,}/i);
   });
 

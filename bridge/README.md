@@ -83,11 +83,11 @@ mods/
     rf_pvp_backend_config.js
 ```
 
-只需要在 `TOOLS/rf_pvp_backend_config.js` 設定自己的 endpoint 與 API key，不要修改 loader：
+只需要在 `TOOLS/rf_pvp_backend_config.js` 設定自己的 endpoint 與 `PVP_WRITE_SECRET`，不要修改 loader；網站登入密碼不放入 mod：
 
 ```js
 window.RF_PVP_BACKEND_ENDPOINT = "https://rf-pvp-analyzer-api.<你的-subdomain>.workers.dev/api/pvp/capture";
-window.RF_PVP_API_KEY = "只保存於你自己的本機 mod 設定";
+window.RF_PVP_WRITE_SECRET = "只保存於你自己的本機 mod 設定";
 ```
 
 `rf_mod_loader.js` 會先載入 `./mods/TOOLS/rf_pvp_backend_config.js`，再載入 `./mods/pvp_double_match_guard.js`。
@@ -102,4 +102,4 @@ window.RF_PVP_API_KEY = "只保存於你自己的本機 mod 設定";
 
 直接後端模式每 30 秒發送一次 `GET /api/pvp/health`，單次請求逾時為 8 秒；失敗後使用指數退避重試，最長間隔 60 秒。心跳只確認服務健康，不包含帳號密碼、`user_token`、WebSocket 原始訊框或遊戲戰鬥資料。網頁重新取得焦點或回到頁面時，會立即嘗試恢復連線。
 
-若狀態長期是「後端錯誤」或「重連中」，請先確認你自己的 Worker 網址、D1 migration、`PVP_API_KEY` secret、CORS origin 與 API key 是否一致；若遠端暫時不可用，可把 `window.RF_PVP_BACKEND_ENDPOINT` 改為 localhost capture URL，使用本機 bridge fallback。
+若狀態長期是「後端錯誤」或「重連中」，請先確認你自己的 Worker 網址、D1 migration、`PVP_WRITE_SECRET` secret、CORS origin 與 寫入密鑰 是否一致；若遠端暫時不可用，可把 `window.RF_PVP_BACKEND_ENDPOINT` 改為 localhost capture URL，使用本機 bridge fallback。

@@ -6,9 +6,12 @@
 
 | 方法 | 路徑 | 用途 | 認證 |
 | --- | --- | --- | --- |
-| `GET` | `/api/pvp/health` | Worker／D1 健康檢查 | `X-RF-API-Key` |
-| `POST` | `/api/pvp/capture` | 接收最小化 5v5 戰績摘要 | `X-RF-API-Key` |
-| `GET` | `/api/pvp/events?workspaceId=<official-user-id>&after=<cursor>` | 讀取指定工作區的新事件 | `X-RF-API-Key`，並依 workspace 隔離 |
+| `POST` | `/api/pvp/login` | 網站密碼登入並建立 HttpOnly session | 網站密碼 |
+| `POST` | `/api/pvp/logout` | 清除網站 session | session（可重複呼叫） |
+| `GET` | `/api/pvp/session` | 查詢目前登入狀態 | HttpOnly session |
+| `GET` | `/api/pvp/health` | Worker／D1 健康檢查 | HttpOnly session |
+| `POST` | `/api/pvp/capture` | 接收最小化 5v5 戰績摘要 | `X-RF-Write-Secret` |
+| `GET` | `/api/pvp/events?workspaceId=<official-user-id>&after=<cursor>` | 讀取指定工作區的新事件 | HttpOnly session，並依 workspace 隔離 |
 
 後端只接受 `type=match`、官方 `user_id` 工作區與白名單戰績欄位。它不接受或保存遊戲密碼、`user_token`、cookie、完整 WebSocket frame 或任意原始封包。相同來源鍵會去重，事件只會回傳給相同 `workspaceId` 的工作區。
 
@@ -16,7 +19,7 @@
 
 先安裝 [Node.js 22+](https://nodejs.org/)，登入 Cloudflare，並在本目錄執行：
 
-```powershell
+```
 cd backend
 npm install --global wrangler@latest
 npx wrangler login
@@ -26,40 +29,49 @@ copy wrangler.toml.example wrangler.toml
 
 執行 D1 建立指令：
 
-```powershell
+```
 npx wrangler d1 create rf-pvp-analyzer
 ```
 
-把輸出的 `database_id` 填入本機 `wrangler.toml` 的 `database_id`，並填入 `account_id`。把 `ALLOWED_ORIGINS` 設為完整的 GitHub Pages origin，例如 `https://chiaomao666.github.io`；不要加 repository 子路徑、不要在尾端加斜線。`wrangler.toml` 已被 `.gitignore` 排除，禁止提交真實 account ID 或其他私密設定。
+把輸出的 `database_id` 填入本機 `wrangler.toml` 的 `database_id`，並填入 `account_id`。把 `ALLOWED_ORIGINS` 設為完整的 GitHub Pages origin，例如 `https://chiaomao666.github.io`；不要加 repository 子路徑、不要在尾端加斜線 。`wrangler.toml` 已被 `.gitignore` 排除，禁止提交真實 account ID 或其他私密設定。
 
-建立 Worker API key。請使用隨機長字串，並只保存於 Cloudflare secret 與你自己的本機 mod 設定：
+建立三個 Cloudflare Worker secrets。網站密碼由你自行設定；寫入密鑰與 session secret 請使用隨機長字串。三者都不要提交到 GitHub：
 
 ```powershell
-$key = [Convert]::ToHexString((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
-$key | npx wrangler secret put PVP_API_KEY --config wrangler.toml
+# 產生隨機寫入密鑰／session secret；網站密碼請自行設定並安全保存
+$b=New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); $k=[Convert]::ToHexString($b).ToLower(); $k
 ```
+
+```powershell
+npx wrangler secret put PVP_SITE_PASSWORD --config wrangler.toml
+npx wrangler secret put PVP_SESSION_SECRET --config wrangler.toml
+npx wrangler secret put PVP_WRITE_SECRET --config wrangler.toml
+```
+
+`PVP_SITE_PASSWORD` 是網站登入密碼；`PVP_WRITE_SECRET` 只放在 mod 設定檔；`PVP_SESSION_SECRET` 只放在 Worker，用來簽署 HttpOnly session。
 
 先在 Cloudflare D1 套用 migration，再部署 Worker：
 
-```powershell
+```
 npx wrangler d1 migrations apply rf-pvp-analyzer --remote --config wrangler.toml
 npx wrangler deploy --config wrangler.toml
 ```
 
 部署後記下 Worker 網址，通常類似：
 
-```text
+```
 https://rf-pvp-analyzer-api.<你的-subdomain>.workers.dev
 ```
 
-驗證健康檢查時必須帶 API key；未帶 key 應回應 `401`：
+驗證網站登入與未登入拒絕：
 
 ```powershell
 curl.exe -i https://rf-pvp-analyzer-api.<你的-subdomain>.workers.dev/api/pvp/health
-curl.exe -i -H "X-RF-API-Key: <你的 PVP_API_KEY>" https://rf-pvp-analyzer-api.<你的-subdomain>.workers.dev/api/pvp/health
+curl.exe -i -c cookies.txt -H "Content-Type: application/json" -d "{\"password\":\"<你的網站密碼>\"}" https://rf-pvp-analyzer-api.<你的-subdomain>.workers.dev/api/pvp/login
+curl.exe -i -b cookies.txt https://rf-pvp-analyzer-api.<你的-subdomain>.workers.dev/api/pvp/health
 ```
 
-第二個請求應看到 `{\"ok\":true,\"durable\":true}`。健康端點不再回傳全域事件總量或最新事件 ID。第一筆 capture 建議使用不含真實帳號的測試資料，確認 D1 migration、API key 與 CORS 都正常後，再讓 mod 使用。
+第一個請求應為 `401`；登入後的請求應看到 `{\"ok\":true,\"durable\":true}`。第一筆 capture 建議使用不含真實帳號的測試資料，確認 D1 migration、寫入密鑰與 CORS 都正常後，再讓 mod 使用。
 
 ## GitHub Actions 自動部署
 
@@ -72,7 +84,7 @@ repository 不需要提交 `backend/wrangler.toml`。請在 GitHub repository �
 | Variable | `PVP_D1_DATABASE_ID` | `wrangler d1 create` 回傳的 D1 database ID |
 | Variable | `PVP_API_ORIGIN` | Pages origin，例如 `https://chiaomao666.github.io` |
 
-請確認 **Settings → Actions → General** 允許 Actions 執行。`.github/workflows/deploy-backend.yml` 會在每次 `main` 分支的後端或部署設定變更時：從範本產生暫存 `wrangler.toml`、執行遠端 D1 migrations，再部署 Worker。真實 key 不會被寫入 repository；`PVP_API_KEY` 必須先以 `wrangler secret put` 設定在 Worker 上。
+請確認 **Settings → Actions → General** 允許 Actions 執行 。`.github/workflows/deploy-backend.yml` 會在每次 `main` 分支的後端或部署設定變更時：從範本產生暫存 `wrangler.toml`、執行遠端 D1 migrations，再部署 Worker。真實 key 不會被寫入 repository；`PVP_SITE_PASSWORD`、`PVP_SESSION_SECRET` 與 `PVP_WRITE_SECRET` 必須先以 `wrangler secret put` 設定在 Worker 上。
 
 若 workflow 顯示找不到 D1，通常是 `PVP_D1_DATABASE_ID` 錯誤、database 尚未建立，或 API Token 權限不足。可先用本機 `wrangler whoami`、`wrangler d1 list` 與上方手動 migration 指令逐項檢查。
 
@@ -84,30 +96,33 @@ Pages workflow 會讀取 repository variable `PVP_BACKEND_ORIGIN`，並在 `pnpm
 | --- | --- | --- |
 | Variable | `PVP_BACKEND_ORIGIN` | Worker origin，例如 `https://rf-pvp-analyzer-api.<你的-subdomain>.workers.dev` |
 
-這個值只填 origin，不要加 `/api/pvp`，也不要加尾端斜線。重新推送 `main` 或在 Pages workflow 使用 **Run workflow** 後，前端的「Remote Backend」模式才會使用新 Worker。未設定時，前端會明確顯示尚未設定網站後端，不會回退到 Manus 網址。API key 不可放入 `PVP_BACKEND_ORIGIN`、GitHub Actions variable、repository 或 Pages bundle；請在 Pages 的「帳號工作區 → 網站後端」欄位於瀏覽器本機輸入，前端只保存於該瀏覽器的 localStorage。
+這個值只填 origin ，不要加 `/api/pvp`，也不要加尾端斜線。重新推送 `main` 或在 Pages workflow 使用 **Run workflow** 後，前端的「Remote Backend」模式才會使用新 Worker。未設定時，前端會明確顯示尚未設定網站後端，不會回退到 Manus 網址。API key 不可放入 `PVP_BACKEND_ORIGIN`、GitHub Actions variable、repository 或 Pages bundle；請在 Pages 的「帳號工作區 → 網站後端」欄位於瀏覽器本機輸入，前端只保存於該瀏覽器的 localStorage。
 
 ## mod 設定
 
-請將 `mods/TOOLS/rf_pvp_backend_config.js` 放在 loader 同層的 `TOOLS/` 資料夾，並只在該檔案設定 endpoint 與 API key：
+請將 `mods/TOOLS/rf_pvp_backend_config.js` 放在 loader 同層的 `TOOLS/` 資料夾，並只在該檔案設定 endpoint 與 `PVP_WRITE_SECRET`：
 
-```js
+```
 window.RF_PVP_BACKEND_ENDPOINT = "https://rf-pvp-analyzer-api.<你的-subdomain>.workers.dev/api/pvp/capture";
-window.RF_PVP_API_KEY = "只放在你自己的瀏覽器 mod 設定";
+window.RF_PVP_WRITE_SECRET = "只放在你自己的瀏覽器 mod 設定";
 ```
 
-`rf_mod_loader.js` 會先載入 `./mods/TOOLS/rf_pvp_backend_config.js`，再載入 `pvp_double_match_guard.js`，不需要修改 loader。守衛只有在官方 `player medals` 結果證據存在、5v5 聚合完成且來源鍵尚未傳送時才 POST。health heartbeat 只呼叫 `/api/pvp/health`，不傳送遊戲資料；連線失敗時會退避重連且不阻塞遊戲。完整載入順序與本機 bridge fallback 請參閱 [`../bridge/README.md`](../bridge/README.md)。
+`rf_mod_loader.js` 會先載入 `./mods/TOOLS/rf_pvp_backend_config.js` ，再載入 `pvp_double_match_guard.js`，不需要修改 loader。守衛只有在官方 `player medals` 結果證據存在、5v5 聚合完成且來源鍵尚未傳送時才 POST。health heartbeat 只呼叫 `/api/pvp/health`，不傳送遊戲資料；連線失敗時會退避重連且不阻塞遊戲。完整載入順序與本機 bridge fallback 請參閱 [`../bridge/README.md`](../bridge/README.md)。
 
 ## 安全與限制
 
-Worker 現在採 **fail-closed**：`PVP_API_KEY` 未設定或請求沒有完全相同的 `X-RF-API-Key` 時，health、capture 與 events 都回應 `401`；`ALLOWED_ORIGINS` 未列出的瀏覽器 origin 不會取得可用的 CORS 回應。CORS 只是一層瀏覽器限制，不是 IP 防火牆，因此不要把 API key 視為不可破解的公開服務認證。
+Worker 現在採 **fail-closed**：網站 session secrets 未設定或 session 無效時，health 與 events 回應 `401`；`PVP_WRITE_SECRET` 未設定或請求沒有完全相同的 `X-RF-Write-Secret` 時，capture 回應 `401`；`ALLOWED_ORIGINS` 未列出的瀏覽器 origin 不會取得可用的 CORS 回應。CORS 只是一層瀏覽器限制，不是 IP 防火牆，因此不要把 API key 視為不可破解的公開服務認證。
 
-API key 放在 mod 端代表使用者可在瀏覽器中查看它；Pages 讀取端則由使用者在瀏覽器本機輸入，兩者都適合個人或小範圍自用。不要把 key 寫入 GitHub、截圖、公開網站或前端環境變數。若要多人使用，應改用每裝置短期 token、Cloudflare Access／Zero Trust、受信任的本機代理，並另行加入速率限制與金鑰輪替。Worker 目前不宣稱能依 IP 提供可靠的使用者隔離；若要限制 IP，應在 Cloudflare WAF／防火牆規則另行設定。
+網站密碼不會寫入 GitHub 或前端 bundle；登入後只使用 Worker 簽發的 HttpOnly、Secure、SameSite session。`PVP_WRITE_SECRET` 會出現在 mod 設定檔，因此只應分發給可信任的寫入端，不要把它當成網站登入密碼。多人使用時仍應加入速率限制、密碼輪替，或改用 Cloudflare Access／Zero Trust。Worker 目前不宣稱能依 IP 提供可靠的使用者隔離；若要限制 IP，應在 Cloudflare WAF／防火牆規則另行設定。
 
 D1 是正式持久化資料庫；刪除 database、migration 或 Worker 前請先備份。Cloudflare Worker 及 D1 由使用者自己的 Cloudflare 帳號管理，與 Manus 執行期、Manus OAuth、Manus database 完全無關。
 
 ## 參考文件
 
 - [Cloudflare Workers GitHub Actions](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/)
+
 - [Cloudflare D1 migrations](https://developers.cloudflare.com/d1/reference/migrations/)
+
 - [Cloudflare API tokens](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/)
+
 - [GitHub Actions secrets and variables](https://docs.github.com/actions/security-guides/using-secrets-in-github-actions)

@@ -86,7 +86,7 @@
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...(window.RF_PVP_API_KEY ? { "X-RF-API-Key": String(window.RF_PVP_API_KEY) } : {}),
+            ...(window.RF_PVP_WRITE_SECRET ? { "X-RF-Write-Secret": String(window.RF_PVP_WRITE_SECRET) } : {}),
           },
           body: JSON.stringify(requestBody),
           signal: controller.signal,

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { checkLocalBridge, getBridgeMode, getRemoteApiKey, isLocalBridgeEnabled, localBridgeOrigin, pollLocalBridge, setRemoteApiKey } from "./localBridge";
+import { checkLocalBridge, getBridgeMode, isLocalBridgeEnabled, localBridgeOrigin, loginRemoteSite, pollLocalBridge } from "./localBridge";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -59,7 +59,7 @@ describe("local bridge client", () => {
 
   it("uses the configured remote backend health endpoint", async () => {
     vi.stubEnv("VITE_PVP_BACKEND_ORIGIN", "https://rf-pvp-api.example.workers.dev/");
-    const localStorage = new Map<string, string>([["rf-pvp-bridge-mode", "remote"], ["rf-pvp-remote-api-key", "secret"]]);
+    const localStorage = new Map<string, string>([["rf-pvp-bridge-mode", "remote"]]);
     vi.stubGlobal("window", {
       localStorage: { getItem: (key: string) => localStorage.get(key) ?? null },
       dispatchEvent: vi.fn(),
@@ -69,7 +69,7 @@ describe("local bridge client", () => {
 
     await expect(checkLocalBridge()).resolves.toMatchObject({ ok: true, durable: true });
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe("https://rf-pvp-api.example.workers.dev/api/pvp/health");
-    expect((fetchMock.mock.calls[0]?.[1] as RequestInit).headers).toMatchObject({ "X-RF-API-Key": "secret" });
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit).headers).toEqual({ Accept: "application/json" });
   });
 
   it("polls the configured remote backend by the active official workspace id", async () => {
@@ -102,11 +102,15 @@ describe("local bridge client", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("stores the remote API key only through the browser storage adapter", () => {
+  it("logs into the remote site through a password POST and browser session", async () => {
+    vi.stubEnv("VITE_PVP_BACKEND_ORIGIN", "https://rf-pvp-api.example.workers.dev");
     const localStorage = new Map<string, string>();
     vi.stubGlobal("window", { localStorage: { getItem: (key: string) => localStorage.get(key) ?? null, setItem: (key: string, value: string) => localStorage.set(key, value), removeItem: (key: string) => localStorage.delete(key) }, dispatchEvent: vi.fn() });
-    setRemoteApiKey(" secret ");
-    expect(getRemoteApiKey()).toBe("secret");
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ authenticated: true }), { status: 200, headers: { "set-cookie": "rf_pvp_session=test" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(loginRemoteSite("site-password")).resolves.toBe(true);
+    expect(JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body))).toEqual({ password: "site-password" });
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit).credentials).toBe("include");
   });
 
   it("does not retain the former Manus backend origin", () => {

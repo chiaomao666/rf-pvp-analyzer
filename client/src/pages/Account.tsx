@@ -1,5 +1,5 @@
 import { activateStoredWorkspace, createDemoWorkspace, getWorkspaceSession, loginOfficialAccount, logoutWorkspace, OfficialLoginError, refreshOfficialMedals, restoreStoredWorkspace } from "@/lib/accountWorkspace";
-import { BridgeMode, checkLocalBridge, getBridgeMode, getLocalBridgeCursor, getRemoteApiKey, isLocalBridgeEnabled, LocalBridgeStatus, pollLocalBridge, setBridgeMode, setBridgeSyncSnapshot, setLocalBridgeCursor, setLocalBridgeEnabled, setRemoteApiKey } from "@/lib/localBridge";
+import { BridgeMode, checkLocalBridge, getBridgeMode, getLocalBridgeCursor, isLocalBridgeEnabled, isRemoteSiteSessionActive, LocalBridgeStatus, loginRemoteSite, logoutRemoteSite, pollLocalBridge, setBridgeMode, setBridgeSyncSnapshot, setLocalBridgeCursor, setLocalBridgeEnabled } from "@/lib/localBridge";
 import { countUnscopedData, getActiveProfileId, ingestBridgeMatch, listProfiles, LocalProfile, migrateUnscopedDataToProfile, parsePvpJson } from "@/lib/localPvpStore";
 import { CheckCircle2, ChevronDown, ChevronRight, Database, Eye, EyeOff, KeyRound, Link2, LogIn, LogOut, RefreshCw, Search, ShieldAlert, Wifi, WifiOff } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
@@ -29,7 +29,8 @@ export default function Account() {
   const [bridgeQueue, setBridgeQueue] = useState(0);
   const [bridgeImported, setBridgeImported] = useState(0);
   const [bridgeLastError, setBridgeLastError] = useState("");
-  const [remoteApiKey, setRemoteApiKeyState] = useState(getRemoteApiKey());
+  const [sitePassword, setSitePassword] = useState("");
+  const [siteSessionActive, setSiteSessionActive] = useState(isRemoteSiteSessionActive());
 
   const refresh = async () => {
     const [storedProfiles, legacy] = await Promise.all([listProfiles(), countUnscopedData()]);
@@ -53,7 +54,7 @@ export default function Account() {
         setBridgeStatus("checking");
         const health = await checkLocalBridge();
         if (disposed) return;
-        setBridgeQueue(health.queueSize ?? 0);
+        setBridgeQueue(0);
         const result = await pollLocalBridge(getLocalBridgeCursor());
         let cursor = getLocalBridgeCursor(); let imported = 0;
         for (const event of result.events) {
@@ -70,7 +71,7 @@ export default function Account() {
     };
     void run();
     return () => { disposed = true; if (timer) globalThis.clearTimeout(timer); };
-  }, [bridgeEnabled, bridgeMode, session?.profile.id, remoteApiKey]);
+  }, [bridgeEnabled, bridgeMode, session?.profile.id, siteSessionActive]);
 
   const filteredProfiles = useMemo(() => {
     const query = profileQuery.trim().toLowerCase();
@@ -135,7 +136,14 @@ export default function Account() {
 
   const toggleBridge = () => { const next = !bridgeEnabled; setBridgeEnabled(next); setLocalBridgeEnabled(next); if (!next) { setBridgeLastError(""); setStatus({ tone: "info", text: "已關閉 bridge 輪詢。" }); } else setStatus({ tone: "info", text: bridgeMode === "remote" ? "已啟用網站後端輪詢；mod 可直接 POST 到受管 API。" : "已啟用本機 bridge 輪詢。請先啟動 rf-bridge.mjs，再由獲准的 mod POST 戰績摘要。" }); };
   const switchBridgeMode = (mode: BridgeMode) => { setBridgeModeState(mode); setBridgeMode(mode); setBridgeLastError(""); setBridgeStatus(bridgeEnabled ? "checking" : "disabled"); setStatus({ tone: "info", text: mode === "remote" ? "已切換至網站後端模式；資料會依目前工作區查詢。" : "已切換至本機 bridge 模式；網站只會讀取 127.0.0.1。" }); };
-  const saveRemoteKey = () => { setRemoteApiKey(remoteApiKey); setStatus({ tone: "success", text: remoteApiKey.trim() ? "Worker API key 已只保存於此瀏覽器，未寫入 GitHub。" : "已清除本機 Worker API key。" }); setBridgeStatus("checking"); };
+  const onSiteLogin = async () => {
+    if (!sitePassword.trim()) { setStatus({ tone: "error", text: "請輸入網站密碼。" }); return; }
+    setBusy(true); setStatus(null);
+    try { await loginRemoteSite(sitePassword); setSitePassword(""); setSiteSessionActive(true); setBridgeStatus("checking"); setStatus({ tone: "success", text: "網站登入成功；session 只由 Worker 以 HttpOnly cookie 保存。" }); }
+    catch (error) { setStatus({ tone: "error", text: error instanceof Error ? error.message : "網站登入失敗。" }); }
+    finally { setBusy(false); }
+  };
+  const onSiteLogout = async () => { await logoutRemoteSite(); setSiteSessionActive(false); setBridgeStatus("offline"); setStatus({ tone: "info", text: "已登出網站後端；本機戰績與工作區未刪除。" }); };
   const renderProfiles = (title: string, items: LocalProfile[], open: boolean, setOpen: (value: boolean) => void) => items.length ? <div className="profile-group"><button type="button" className="profile-group-toggle" onClick={() => setOpen(!open)}><span>{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}{title}</span><small>{items.length}</small></button>{open && items.map(profile => <button className={session?.profile.id === profile.id ? "profile-select selected" : "profile-select"} key={profile.id} onClick={() => void onActivate(profile.id)} disabled={busy}><span>{profileLabel(profile)}</span><small>{profile.lastVerifiedAt ? "曾經登入確認" : "本機示範"}</small></button>)}</div> : null;
   return <div className="account-page">
     <section className="page-titlebar account-titlebar">
@@ -163,7 +171,7 @@ export default function Account() {
       </aside>
     </div>
 
-    <section className="panel bridge-panel"><header><span><Link2 size={17} /></span><div><p className="eyebrow">{bridgeMode === "remote" ? "REMOTE BACKEND / PASSIVE CAPTURE" : "LOCALHOST BRIDGE / PASSIVE CAPTURE"}</p><h2>{bridgeMode === "remote" ? "網站後端接收" : "本機橋接"}</h2><p>{bridgeMode === "remote" ? "網站後端只接受由獲准 mod 主動送出的最小戰績摘要，依 workspaceId 分區並做來源去重；目前試作佇列保存在記憶體。" : "網站只輪詢 `127.0.0.1` 的記憶體佇列；bridge 不會接收密碼、token、cookie 或任意原始封包，只接受由獲准 mod 主動送出的最小戰績摘要。"}</p></div><div className={`bridge-indicator ${bridgeStatus}`}><i /><b>{bridgeLabel(bridgeStatus)}</b></div></header><div className="bridge-controls"><div><strong>{bridgeStatus === "online" ? (bridgeMode === "remote" ? "已連線到網站後端" : "已連線到本機服務") : bridgeEnabled ? (bridgeMode === "remote" ? "等待網站後端" : "等待本機服務") : "目前未啟用"}</strong><small>{bridgeLastError || "資料只會匯入目前工作區；切換工作區不會重新驗證官方帳號。"}</small></div><div className="bridge-mode-switch"><button type="button" className={bridgeMode === "local" ? "active" : ""} onClick={() => switchBridgeMode("local")}>本機</button><button type="button" className={bridgeMode === "remote" ? "active" : ""} onClick={() => switchBridgeMode("remote")}>網站後端</button></div><button type="button" className={bridgeEnabled ? "secondary-action bridge-toggle active" : "secondary-action bridge-toggle"} onClick={toggleBridge}><Wifi size={15} />{bridgeEnabled ? "關閉 bridge 輪詢" : "啟用 bridge 輪詢"}</button></div>{bridgeMode === "remote" && <div className="remote-key-box"><label><span>Worker API key（只存本機）</span><input type="password" autoComplete="off" value={remoteApiKey} onChange={event => setRemoteApiKeyState(event.target.value)} placeholder="貼上你在 Cloudflare secret 設定的 PVP_API_KEY" /></label><div className="bridge-key-actions"><small>不會寫入 GitHub 或公開 bundle；清除瀏覽器資料後需重新輸入。</small><button type="button" className="secondary-action" onClick={saveRemoteKey}>儲存本機 key</button></div></div>}<div className="bridge-stats"><span>QUEUE <b>{bridgeQueue}</b></span><span>本頁匯入 <b>{bridgeImported}</b></span><span>游標 <b>{getLocalBridgeCursor()}</b></span></div><p className="bridge-note">安全邊界：{bridgeMode === "remote" ? "後端只接受白名單摘要並依 workspaceId 分區；目前試作佇列在服務重啟後會清空，正式環境需持久化儲存。" : "bridge 綁定 loopback、只存在記憶體，重啟後佇列會清空。若網站是 GitHub Pages，bridge 仍必須在同一台電腦上另行啟動。"}</p></section>
+    <section className="panel bridge-panel"><header><span><Link2 size={17} /></span><div><p className="eyebrow">{bridgeMode === "remote" ? "REMOTE BACKEND / PASSIVE CAPTURE" : "LOCALHOST BRIDGE / PASSIVE CAPTURE"}</p><h2>{bridgeMode === "remote" ? "網站後端接收" : "本機橋接"}</h2><p>{bridgeMode === "remote" ? "網站後端只接受由獲准 mod 主動送出的最小戰績摘要，依 workspaceId 分區並做來源去重；目前試作佇列保存在記憶體。" : "網站只輪詢 `127.0.0.1` 的記憶體佇列；bridge 不會接收密碼、token、cookie 或任意原始封包，只接受由獲准 mod 主動送出的最小戰績摘要。"}</p></div><div className={`bridge-indicator ${bridgeStatus}`}><i /><b>{bridgeLabel(bridgeStatus)}</b></div></header><div className="bridge-controls"><div><strong>{bridgeStatus === "online" ? (bridgeMode === "remote" ? "已連線到網站後端" : "已連線到本機服務") : bridgeEnabled ? (bridgeMode === "remote" ? "等待網站後端" : "等待本機服務") : "目前未啟用"}</strong><small>{bridgeLastError || "資料只會匯入目前工作區；切換工作區不會重新驗證官方帳號。"}</small></div><div className="bridge-mode-switch"><button type="button" className={bridgeMode === "local" ? "active" : ""} onClick={() => switchBridgeMode("local")}>本機</button><button type="button" className={bridgeMode === "remote" ? "active" : ""} onClick={() => switchBridgeMode("remote")}>網站後端</button></div><button type="button" className={bridgeEnabled ? "secondary-action bridge-toggle active" : "secondary-action bridge-toggle"} onClick={toggleBridge}><Wifi size={15} />{bridgeEnabled ? "關閉 bridge 輪詢" : "啟用 bridge 輪詢"}</button></div>{bridgeMode === "remote" && <div className="remote-key-box"><label><span>網站密碼</span><input type="password" autoComplete="current-password" value={sitePassword} onChange={event => setSitePassword(event.target.value)} placeholder="輸入網站管理者設定的密碼" disabled={busy} /></label><div className="bridge-key-actions"><small>{siteSessionActive ? "網站 session 已建立；密碼不會寫入瀏覽器儲存。" : "登入後由 Worker 發出 HttpOnly session cookie；密碼不會寫入 GitHub。"}</small>{siteSessionActive ? <button type="button" className="secondary-action" onClick={() => void onSiteLogout()} disabled={busy}>登出網站</button> : <button type="button" className="secondary-action" onClick={() => void onSiteLogin()} disabled={busy}>登入網站</button>}</div></div>}<div className="bridge-stats"><span>QUEUE <b>{bridgeQueue}</b></span><span>本頁匯入 <b>{bridgeImported}</b></span><span>游標 <b>{getLocalBridgeCursor()}</b></span></div><p className="bridge-note">安全邊界：{bridgeMode === "remote" ? "後端只接受白名單摘要並依 workspaceId 分區；目前試作佇列在服務重啟後會清空，正式環境需持久化儲存。" : "bridge 綁定 loopback、只存在記憶體，重啟後佇列會清空。若網站是 GitHub Pages，bridge 仍必須在同一台電腦上另行啟動。"}</p></section>
 
     {session && (unscoped.matches || unscoped.imports) > 0 && <section className="panel migration-panel"><div><p className="eyebrow">ONE-TIME LEGACY MIGRATION</p><h2>發現未綁定的既有資料</h2><p>本機仍有 <b>{unscoped.matches}</b> 筆戰績及 <b>{unscoped.imports}</b> 筆匯入歷程尚未屬於任何帳號。為避免誤綁，不會自動轉移。確認後會全部指派到目前的 <b>{profileLabel(session.profile)}</b>；此動作不會刪除資料。</p></div><button className="primary-action" type="button" onClick={() => void onMigrate()} disabled={busy}>確認轉移既有資料</button></section>}
 
