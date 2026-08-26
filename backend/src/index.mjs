@@ -68,7 +68,8 @@ export default {
       if (request.method === "POST" && url.pathname === "/api/pvp/logout") return json({ authenticated: false }, 200, { ...headers, "set-cookie": clearSessionCookie() });
       if (request.method === "GET" && url.pathname === "/api/pvp/session") return (await hasSiteSession(request, env)) ? json({ authenticated: true }, 200, headers) : json({ error: "unauthorized" }, 401, headers);
       if (request.method === "GET" && url.pathname === "/api/pvp/health") {
-        if (!(await hasSiteSession(request, env))) return json({ error: "unauthorized" }, 401, headers);
+        const siteAuthorized = await hasSiteSession(request, env);
+        if (!siteAuthorized && !writeAuthorized(request, env)) return json({ error: "unauthorized" }, 401, headers);
         return json(await health(env), 200, headers);
       }
       if (request.method === "POST" && url.pathname === "/api/pvp/capture") {

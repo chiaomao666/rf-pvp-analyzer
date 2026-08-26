@@ -55,6 +55,13 @@ describe("PVP Worker security boundary", () => {
     await expect(response.json()).resolves.toEqual({ ok: true, durable: true });
   });
 
+  it("allows a write-authorized mod to probe minimal health without a site session", async () => {
+    const current = env();
+    const response = await worker.fetch(request("/api/pvp/health", { headers: { "X-RF-Write-Secret": "write-secret" } }), current);
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: true, durable: true });
+  });
+
   it("does not allow an unlisted browser origin", async () => {
     const current = env();
     const response = await worker.fetch(new Request("https://worker.example/api/pvp/session", { headers: { Origin: "https://evil.example" } }), current);
