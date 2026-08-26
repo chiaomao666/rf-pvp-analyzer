@@ -45,6 +45,18 @@ describe("PVP Worker security boundary", () => {
     expect(response.headers.get("set-cookie")).toMatch(/rf_pvp_session=.*HttpOnly/);
     expect(response.headers.get("set-cookie")).toMatch(/Secure/);
     expect(response.headers.get("set-cookie")).toMatch(/SameSite=None/);
+    expect(response.headers.get("set-cookie")).toMatch(/Partitioned/);
+    expect(response.headers.get("access-control-allow-origin")).toBe("https://chiaomao666.github.io");
+    expect(response.headers.get("access-control-allow-credentials")).toBe("true");
+  });
+
+  it("clears the same partitioned cookie on logout", async () => {
+    const current = env();
+    const response = await worker.fetch(request("/api/pvp/logout", { method: "POST" }), current);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("set-cookie")).toMatch(/Max-Age=0/);
+    expect(response.headers.get("set-cookie")).toMatch(/SameSite=None/);
+    expect(response.headers.get("set-cookie")).toMatch(/Partitioned/);
   });
 
   it("accepts a valid site session and keeps health response minimal", async () => {

@@ -49,8 +49,10 @@ async function hasSiteSession(request, env) {
   const expected = bytesToBase64Url(await hmac(payload, String(env.PVP_SESSION_SECRET))); if (!(await sameSecret(signature, expected, String(env.PVP_SESSION_SECRET)))) return false;
   try { return Number(JSON.parse(new TextDecoder().decode(base64UrlToBytes(payload))).exp) > Math.floor(Date.now() / 1000); } catch { return false; }
 }
-function sessionCookie(token) { return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; Max-Age=${SESSION_TTL_SECONDS}; HttpOnly; Secure; SameSite=None`; }
-function clearSessionCookie() { return `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=None`; }
+// GitHub Pages 與 workers.dev 是跨 site；Partitioned 讓 Chromium 在第三方 Cookie
+// 限制下仍能把這顆 host-only session cookie 限定給目前的 Pages top-level site。
+function sessionCookie(token) { return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; Max-Age=${SESSION_TTL_SECONDS}; HttpOnly; Secure; SameSite=None; Partitioned`; }
+function clearSessionCookie() { return `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=None; Partitioned`; }
 async function readBody(request) { const text = await request.text(); if (new TextEncoder().encode(text).byteLength > MAX_BODY_BYTES) throw new Error("request body too large"); try { return text ? JSON.parse(text) : {}; } catch { throw new Error("invalid JSON"); } }
 async function health(env) { await env.DB.prepare("SELECT 1 AS ok").first(); return { ok: true, durable: true }; }
 

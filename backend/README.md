@@ -113,7 +113,7 @@ window.RF_PVP_WRITE_SECRET = "只放在你自己的瀏覽器 mod 設定";
 
 Worker 現在採 **fail-closed**：網站 session secrets 未設定或 session 無效時，health 與 events 回應 `401`；`PVP_WRITE_SECRET` 未設定或請求沒有完全相同的 `X-RF-Write-Secret` 時，capture 回應 `401`；`ALLOWED_ORIGINS` 未列出的瀏覽器 origin 不會取得可用的 CORS 回應。CORS 只是一層瀏覽器限制，不是 IP 防火牆，因此不要把 API key 視為不可破解的公開服務認證。
 
-網站密碼不會寫入 GitHub 或前端 bundle；登入後只使用 Worker 簽發的 HttpOnly、Secure、SameSite session。`PVP_WRITE_SECRET` 會出現在 mod 設定檔，因此只應分發給可信任的寫入端，不要把它當成網站登入密碼。多人使用時仍應加入速率限制、密碼輪替，或改用 Cloudflare Access／Zero Trust。Worker 目前不宣稱能依 IP 提供可靠的使用者隔離；若要限制 IP，應在 Cloudflare WAF／防火牆規則另行設定。
+網站密碼不會寫入 GitHub 或前端 bundle；登入後只使用 Worker 簽發的 HttpOnly、Secure、SameSite=None、Partitioned session。由於 GitHub Pages 與 `workers.dev` 屬於跨 site，`Partitioned` 可讓 Chromium 將 cookie 限定給目前 GitHub Pages top-level site，避免一般第三方 cookie 限制導致「登入成功但後續 `/session`、`/health` 仍是 401」。前端仍須維持 `fetch(..., { credentials: "include" })`，而 Worker 的 `ALLOWED_ORIGINS` 必須是精確的 Pages origin。`PVP_WRITE_SECRET` 會出現在 mod 設定檔，因此只應分發給可信任的寫入端，不要把它當成網站登入密碼。多人使用時仍應加入速率限制、密碼輪替，或改用 Cloudflare Access／Zero Trust。Worker 目前不宣稱能依 IP 提供可靠的使用者隔離；若要限制 IP，應在 Cloudflare WAF／防火牆規則另行設定。
 
 D1 是正式持久化資料庫；刪除 database、migration 或 Worker 前請先備份。Cloudflare Worker 及 D1 由使用者自己的 Cloudflare 帳號管理，與 Manus 執行期、Manus OAuth、Manus database 完全無關。
 

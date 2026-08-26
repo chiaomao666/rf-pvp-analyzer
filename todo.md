@@ -1,5 +1,7 @@
 # Project TODO
 
+- [x] 修正 Cloudflare Worker 登入成功後 session cookie 未被後續 `/api/pvp/session`、`/api/pvp/health` 驗證的 401 問題，並驗證跨 GitHub Pages origin 的 credentialed CORS。
+
 - [x] 建立以登入使用者為資料邊界的排名戰資料模型與資料庫遷移。
 - [x] 建立受保護的戰績新增、查詢、詳情與刪除 API。
 - [x] 實作 JSON 匯入驗證、欄位辨識與未辨識原始資料保留機制。
@@ -279,3 +281,6 @@
 - [x] 恢復 A 強安全模式：health／capture／events 全部要求 API key，確認 CORS 與最小 health 回應維持不變；只推送 GitHub。
 - [x] 將網站登入改為自訂密碼 session，將 mod 寫入驗證改為獨立 `PVP_WRITE_SECRET`，依登入身分隔離 workspace；只推送 GitHub，不更新 Manus 受管網站。
 - [x] 整理本機 `PVP_WRITE_SECRET` 設定範本，稽核並修正 GitHub Pages 網站密碼登入／session 流程；實際 secret 不進 repository，只推送 GitHub。
+- [ ] 測試 GitHub Pages 登入、Worker session 與 mod 戰績寫入流程；不新增假戰績、不更新 Manus 受管網站。
+
+- [ ] 在 GitHub Pages 登入成功／session 建立時加入安全 console.log 診斷訊息，不輸出密碼、cookie、secret 或完整戰績；只推送 GitHub。
