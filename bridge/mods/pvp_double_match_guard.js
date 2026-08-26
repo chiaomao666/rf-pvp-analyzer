@@ -132,6 +132,8 @@
   const PANEL_POSITION_KEY = "rf_pvp_guard_panel_position";
   const MAX_LOGS = 20;
   const MAX_EVENTS = 160;
+  const ACTIVE_BATTLE_EVENT_LIMIT = 96;
+  const ACTIVE_BATTLE_TTL_MS = 10 * 60 * 1000;
 
   if (window.__RF_PVP_DOUBLE_MATCH_GUARD_V8__) {
     console.warn(`[${MOD_NAME}] 已載入，略過重複安裝。`);
@@ -153,6 +155,7 @@
   let identityObserver = null;
   let identityRoot = null;
   let identityDebounce = null;
+  const activeBattleEvents = new Map();
 
   function readArray(key) {
     try {
@@ -280,12 +283,43 @@
     updateUIPanel();
   }
 
+  function activeBattleChannelForEvent(event, payload, topic) {
+    if (isBattleChannel(topic)) return String(topic);
+    if (String(event || "").toLowerCase() === "pvp_battle" && isBattleChannel(payload?.channel)) return String(payload.channel);
+    if (/^player:\\d+$/i.test(String(topic || "")) && currentBattleChannel) return currentBattleChannel;
+    return null;
+  }
+
+  function addToActiveBattleBuffer(frame, event, payload, topic) {
+    const channel = activeBattleChannelForEvent(event, payload, topic);
+    if (!channel) return;
+    const now = Number(frame.capturedAt || Date.now());
+    for (const [key, value] of activeBattleEvents) {
+      if (now - value.lastAt > ACTIVE_BATTLE_TTL_MS) activeBattleEvents.delete(key);
+    }
+    const entry = activeBattleEvents.get(channel) || { events: [], lastAt: now };
+    entry.events.push(frame);
+    if (entry.events.length > ACTIVE_BATTLE_EVENT_LIMIT) entry.events.splice(0, entry.events.length - ACTIVE_BATTLE_EVENT_LIMIT);
+    entry.lastAt = now;
+    activeBattleEvents.set(channel, entry);
+  }
+
+  function analyzerEventPool(events) {
+    const combined = [...events, ...Array.from(activeBattleEvents.values()).flatMap((entry) => entry.events)];
+    const seen = new Set();
+    return combined.filter((event) => {
+      const key = `${event.capturedAt}|${event.topic}|${event.event}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).sort((left, right) => Number(left.capturedAt || 0) - Number(right.capturedAt || 0));
+  }
+
   /** 保留實際收到的 PVP 封包；不從畫面或 React state 推測資料。 */
   function capturePvpEvent(event, payload, topic, source = "channel", rawFrame) {
     if (!isRelevantPvpEvent(event, payload, topic)) return;
     observePvpState(event, payload, topic);
-    const events = readArray(EVENT_KEY);
-    events.push({
+    const capturedEvent = {
       capturedAt: Date.now(),
       capturedAtIso: new Date().toISOString(),
       event: String(event),
@@ -294,7 +328,10 @@
       source,
       ...(location.hash ? { capturedPath: location.hash } : {}),
       rawFrame: rawFrame === undefined ? undefined : redactAndClone(rawFrame),
-    });
+    };
+    addToActiveBattleBuffer(capturedEvent, event, payload, topic);
+    const events = readArray(EVENT_KEY);
+    events.push(capturedEvent);
     const evicted = Math.max(0, events.length - MAX_EVENTS);
     if (evicted) events.splice(0, evicted);
     writeArray(EVENT_KEY, events);
@@ -312,7 +349,7 @@
     writeCaptureStats(stats);
     capturedSinceLoad += 1;
     updateUIPanel();
-    forwardNewRecordsToBridge(uniqueAnalyzerRecords(events));
+    forwardNewRecordsToBridge(uniqueAnalyzerRecords(analyzerEventPool(events)));
   }
 
   function asObject(value) {
@@ -351,7 +388,7 @@
     currentBattleIdentity = { ...currentBattleIdentity, ...next };
     console.log(`[${MOD_NAME}] 已擷取 AniDoor 身份：`, currentBattleIdentity);
     updateUIPanel();
-    forwardNewRecordsToBridge(uniqueAnalyzerRecords(readArray(EVENT_KEY)));
+    forwardNewRecordsToBridge(uniqueAnalyzerRecords(analyzerEventPool(readArray(EVENT_KEY))));
     return true;
   }
 
@@ -545,7 +582,7 @@
       const capturedEvent = battleEvents[index];
       const payload = unwrapPhoenixResponse(capturedEvent.payload);
       const round = asObject(payload?.round);
-      if (payload?.next_action === "medals" && hasWarriors(round?.warriors)) {
+      if (String(payload?.next_action || "").toLowerCase() === "medals" && hasWarriors(round?.warriors)) {
         return { capturedEvent, payload };
       }
     }
@@ -565,7 +602,10 @@
         const hasTopLevelMode = Boolean(asObject(response?.["1v1"]) || asObject(response?.["3v3"]) || asObject(response?.["5v5"]));
         const hasNestedMode = Boolean(asObject(nestedMedals?.["1v1"]) || asObject(nestedMedals?.["3v3"]) || asObject(nestedMedals?.["5v5"]));
         const hasPreviousRecord = Boolean(asObject(response?.previous_record) || asObject(nestedMedals?.previous_record));
-        if (!/^player:\d+$/i.test(String(capturedEvent?.topic || "")) || !hasPreviousRecord || !(hasTopLevelMode || hasNestedMode)) return null;
+        // 某些結果回覆只帶目前 medals 與 score/rank，不帶 previous_record；仍可保存戰績，
+        // 但 extractMedalsMetrics 會在缺少前值時保留 unknown／缺少的變化欄位，不做推測。
+        const hasCurrentResult = hasTopLevelMode || hasNestedMode;
+        if (!/^player:\d+$/i.test(String(capturedEvent?.topic || "")) || !hasCurrentResult) return null;
         return { capturedEvent, response };
       })
       .filter(Boolean)
@@ -814,7 +854,7 @@
 
   function buildAnalyzerExport(generatedAt = new Date()) {
     const rawEvents = readArray(EVENT_KEY);
-    const records = uniqueAnalyzerRecords(rawEvents);
+    const records = uniqueAnalyzerRecords(analyzerEventPool(rawEvents));
     const localExportTime = formatLocalExportTime(generatedAt);
     return {
       format: "rf-pvp-analyzer/v1",
@@ -974,7 +1014,7 @@
         transport: window.__RF_PVP_SOCKET_TAP__?.getStatus?.() || { attached: false, message: transportMessage },
         captureStats: readCaptureStats(),
         capturedSinceLoad,
-        recognisedMatchCount: uniqueAnalyzerRecords(readArray(EVENT_KEY)).length,
+        recognisedMatchCount: uniqueAnalyzerRecords(analyzerEventPool(readArray(EVENT_KEY))).length,
         logs: readArray(LOG_KEY),
       };
       const logs = JSON.stringify(diagnostics, null, 2);
@@ -1048,7 +1088,7 @@
   window.RF_PVP_Debug = {
     getLogs: () => readArray(LOG_KEY),
     getCapturedEvents: () => readArray(EVENT_KEY),
-    getAnalyzerRecords: () => uniqueAnalyzerRecords(readArray(EVENT_KEY)),
+    getAnalyzerRecords: () => uniqueAnalyzerRecords(analyzerEventPool(readArray(EVENT_KEY))),
     getCaptureDiagnostics: () => ({ captureStats: readCaptureStats(), capturedSinceLoad, transport: window.__RF_PVP_SOCKET_TAP__?.getStatus?.() || null }),
     buildAnalyzerExport,
     downloadAnalyzerExport,

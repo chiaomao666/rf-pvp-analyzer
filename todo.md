@@ -245,3 +245,7 @@
 - [x] 核對 GitHub Pages 最近更新時間、最新 commit 與 workflow，區分快取／部署時間／程式版本。
 
 - [x] 為受管預覽環境補上僅服務 dist/public 的靜態檔案啟動入口，不恢復任何 Manus／本機資料 API。
+
+- [x] 重現並定位剛完成 PVP 卻未建立戰績的漏記問題。
+- [x] 驗證結束封包、5v5 medals、去重鍵、Worker capture 與前端 events 讀回各階段。
+- [x] 修正漏記流程並新增對應回歸測試與公開版本驗證。

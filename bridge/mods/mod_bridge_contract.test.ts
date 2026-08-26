@@ -54,6 +54,22 @@ describe("approved PVP mod bridge contract", () => {
     expect(guard).toContain("identitySignature");
   });
 
+  it("accepts current player medals even when previous_record is absent", () => {
+    const guard = read("pvp_double_match_guard.js");
+    expect(guard).toContain("const hasCurrentResult = hasTopLevelMode || hasNestedMode;");
+    expect(guard).toContain("|| !hasCurrentResult) return null;");
+    expect(guard).toContain("extractMedalsMetrics");
+  });
+
+  it("retains active battle frames beyond the rolling archive for late result replies", () => {
+    const guard = read("pvp_double_match_guard.js");
+    expect(guard).toContain("ACTIVE_BATTLE_EVENT_LIMIT = 96");
+    expect(guard).toContain("ACTIVE_BATTLE_TTL_MS = 10 * 60 * 1000");
+    expect(guard).toContain("activeBattleEvents");
+    expect(guard).toContain("analyzerEventPool");
+    expect(guard).toContain("uniqueAnalyzerRecords(analyzerEventPool(events))");
+  });
+
   it("keeps credentials and raw frames out of the embedded bridge client", () => {
     const guard = read("pvp_double_match_guard.js");
     const embeddedClient = guard.slice(guard.indexOf("function installEmbeddedBridgeClient"), guard.indexOf("const MOD_NAME"));
