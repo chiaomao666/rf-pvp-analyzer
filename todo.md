@@ -1,5 +1,12 @@
 # Project TODO
 
+- [x] 讓 Worker `/api/pvp/login` 安全區分 `PVP_SITE_PASSWORD` 或 `PVP_SESSION_SECRET` 缺失的設定錯誤與使用者密碼不符，避免兩者皆誤報 401。
+- [ ] 在最新 Worker 部署後，以使用者目前的網站密碼重新登入，依 HTTP 503／401／200 結果判定 Cloudflare Secret 缺失、密碼不符或登入成功。
+
+- [ ] 在使用者重建 Cloudflare 的 `PVP_SITE_PASSWORD`、`PVP_SESSION_SECRET`、`PVP_WRITE_SECRET` 後，重新對應網站登入密碼與本機 mod 寫入密鑰，並驗證登入與 heartbeat 恢復。
+
+- [ ] 協助使用者在固定的 `assets/mods/rf_pvp_backend_config.js` 填入有效 `PVP_WRITE_SECRET`，並以 v15 安全診斷確認狀態由 placeholder 改為已設定。
+
 - [x] 將固定本機 mod 根目錄 `assets/mods/` 納入載入器、PVP 守衛、文件與錯誤提示規格；設定檔固定為 `assets/mods/rf_pvp_backend_config.js`，不得再假設或提示 `TOOLS/` 子目錄。
 - [ ] 在使用者本機以固定 `assets/mods/` 配置替換載入器、守衛與設定檔後，確認守衛顯示正確的寫入密鑰狀態與 heartbeat。
 

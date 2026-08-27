@@ -37,16 +37,17 @@ function cors(request, env) {
   const allowOrigin = origin && allowed.includes(origin) ? origin : "null";
   return { "access-control-allow-origin": allowOrigin, "access-control-allow-methods": "GET,POST,OPTIONS", "access-control-allow-headers": "Content-Type, Accept, X-RF-Write-Secret", "access-control-allow-credentials": "true", vary: "Origin" };
 }
-function writeAuthorized(request, env) { const expected = String(env.PVP_WRITE_SECRET || "").trim(); const supplied = request.headers.get("X-RF-Write-Secret") || ""; return Boolean(expected) && supplied === expected; }
+function secretValue(env, name) { return String(env[name] || "").trim(); }
+function writeAuthorized(request, env) { const expected = secretValue(env, "PVP_WRITE_SECRET"); const supplied = request.headers.get("X-RF-Write-Secret") || ""; return Boolean(expected) && supplied === expected; }
 function cookieValue(request, name) { const header = request.headers.get("Cookie") || ""; const match = header.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${name}=`)); return match ? decodeURIComponent(match.slice(name.length + 1)) : ""; }
 function bytesToBase64Url(bytes) { let binary = ""; for (const byte of bytes) binary += String.fromCharCode(byte); return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, ""); }
 function base64UrlToBytes(value) { const normalized = value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - value.length % 4) % 4); const binary = atob(normalized); return Uint8Array.from(binary, (char) => char.charCodeAt(0)); }
 async function hmac(value, secret) { const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]); return new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value))); }
 async function sameSecret(value, expected, secret) { if (!value || !expected || !secret) return false; const actual = await hmac(value, secret); const target = await hmac(expected, secret); if (actual.length !== target.length) return false; let difference = 0; for (let index = 0; index < actual.length; index += 1) difference |= actual[index] ^ target[index]; return difference === 0; }
-async function createSession(env) { const payload = bytesToBase64Url(new TextEncoder().encode(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS }))); const signature = bytesToBase64Url(await hmac(payload, String(env.PVP_SESSION_SECRET || ""))); return `${payload}.${signature}`; }
+async function createSession(env) { const payload = bytesToBase64Url(new TextEncoder().encode(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS }))); const signature = bytesToBase64Url(await hmac(payload, secretValue(env, "PVP_SESSION_SECRET"))); return `${payload}.${signature}`; }
 async function hasSiteSession(request, env) {
-  const token = cookieValue(request, SESSION_COOKIE); const [payload, signature] = token.split("."); if (!payload || !signature || !env.PVP_SESSION_SECRET) return false;
-  const expected = bytesToBase64Url(await hmac(payload, String(env.PVP_SESSION_SECRET))); if (!(await sameSecret(signature, expected, String(env.PVP_SESSION_SECRET)))) return false;
+  const token = cookieValue(request, SESSION_COOKIE); const [payload, signature] = token.split("."); const sessionSecret = secretValue(env, "PVP_SESSION_SECRET"); if (!payload || !signature || !sessionSecret) return false;
+  const expected = bytesToBase64Url(await hmac(payload, sessionSecret)); if (!(await sameSecret(signature, expected, sessionSecret))) return false;
   try { return Number(JSON.parse(new TextDecoder().decode(base64UrlToBytes(payload))).exp) > Math.floor(Date.now() / 1000); } catch { return false; }
 }
 // GitHub Pages 與 workers.dev 是跨 site；Partitioned 讓 Chromium 在第三方 Cookie
@@ -63,7 +64,9 @@ export default {
     try {
       if (request.method === "POST" && url.pathname === "/api/pvp/login") {
         const body = asObject(await readBody(request)); const password = typeof body?.password === "string" ? body.password : "";
-        const valid = await sameSecret(password, String(env.PVP_SITE_PASSWORD || ""), String(env.PVP_SESSION_SECRET || ""));
+        const sitePassword = secretValue(env, "PVP_SITE_PASSWORD"); const sessionSecret = secretValue(env, "PVP_SESSION_SECRET");
+        if (!sitePassword || !sessionSecret) return json({ error: "authentication configuration unavailable" }, 503, headers);
+        const valid = await sameSecret(password, sitePassword, sessionSecret);
         if (!valid) return json({ error: "unauthorized" }, 401, headers);
         const token = await createSession(env); return json({ authenticated: true }, 200, { ...headers, "set-cookie": sessionCookie(token) });
       }

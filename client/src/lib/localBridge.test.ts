@@ -113,6 +113,12 @@ describe("local bridge client", () => {
     expect((fetchMock.mock.calls[0]?.[1] as RequestInit).credentials).toBe("include");
   });
 
+  it("explains when the Worker login configuration is unavailable", async () => {
+    vi.stubEnv("VITE_PVP_BACKEND_ORIGIN", "https://rf-pvp-api.example.workers.dev");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "authentication configuration unavailable" }), { status: 503 })));
+    await expect(loginRemoteSite("site-password")).rejects.toThrow("PVP_SITE_PASSWORD 與 PVP_SESSION_SECRET 已儲存並部署");
+  });
+
   it("does not retain the former Manus backend origin", () => {
     expect(localBridgeOrigin()).not.toContain("manus.space");
   });

@@ -64,7 +64,7 @@ export async function loginRemoteSite(password: string) {
   const response = await request(remoteEndpoint("/api/pvp/login"), { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ password }) });
   if (!response.ok) {
     console.warn("[RF PVP] 網站登入失敗", { status: response.status, at: new Date().toISOString() });
-    throw new Error(response.status === 401 ? "網站密碼錯誤" : `網站登入 HTTP ${response.status}`);
+    throw new Error(response.status === 503 ? "網站後端登入設定尚未完成。請確認 Cloudflare 的 PVP_SITE_PASSWORD 與 PVP_SESSION_SECRET 已儲存並部署。" : response.status === 401 ? "網站密碼錯誤" : `網站登入 HTTP ${response.status}`);
   }
   setRemoteSiteSessionActive(true);
   console.info("[RF PVP] 網站登入成功，HttpOnly session 已建立", { at: new Date().toISOString() });

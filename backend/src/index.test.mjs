@@ -50,6 +50,19 @@ describe("PVP Worker security boundary", () => {
     expect(response.headers.get("access-control-allow-credentials")).toBe("true");
   });
 
+  it("returns a generic service error when a login secret is missing", async () => {
+    const withoutSessionSecret = env(); delete withoutSessionSecret.PVP_SESSION_SECRET;
+    const response = await worker.fetch(request("/api/pvp/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: "site-password" }) }), withoutSessionSecret);
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({ error: "authentication configuration unavailable" });
+  });
+
+  it("keeps an incorrect password distinct from a missing login secret", async () => {
+    const response = await worker.fetch(request("/api/pvp/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: "wrong-password" }) }), env());
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ error: "unauthorized" });
+  });
+
   it("clears the same partitioned cookie on logout", async () => {
     const current = env();
     const response = await worker.fetch(request("/api/pvp/logout", { method: "POST" }), current);
