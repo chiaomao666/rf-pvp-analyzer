@@ -2,8 +2,8 @@
 
 - [x] 澄清帳號頁網站登出只會清除瀏覽器 session，不會撤銷 mod 的 `PVP_WRITE_SECRET` 寫入授權，避免誤認正常心跳為登入殘留。
 
-- [ ] 診斷已部署 Worker 回傳 `PVP_ADMIN_PASSWORD must be configured` 的 503 問題，確認 Cloudflare Secret 已綁定至正確 Worker 與部署版本。
-- [ ] 提供不外洩既有密碼的 Cloudflare Dashboard／Wrangler 管理者密碼重設與安全驗證流程。
+- [x] 診斷已部署 Worker 回傳 `PVP_ADMIN_PASSWORD must be configured` 的 503 問題，確認 Cloudflare Secret 已綁定至正確 Worker 與部署版本。
+- [x] 提供不外洩既有密碼的 Cloudflare Dashboard／Wrangler 管理者密碼重設與安全驗證流程。
 
 - [x] 新增僅限已登入 session 使用者的網站端密碼變更功能，將密碼以雜湊保存於 D1，保留 `PVP_SESSION_SECRET` 與 `PVP_WRITE_SECRET` 的 Cloudflare Secret 隔離。
 
