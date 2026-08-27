@@ -115,7 +115,7 @@ const WORKER_ORIGIN = "https://rf-pvp-analyzer-api.<你的-subdomain>.workers.de
 const WRITE_SECRET = "只放在你自己的瀏覽器 mod 設定";
 ```
 
-`rf_mod_loader.js` 會先載入 `./mods/rf_pvp_backend_config.js`，再載入 `pvp_double_match_guard.js`；守衛會一次性取用設定並立即移除暫時的全域取用函式。舊版設定檔仍可使用，但守衛會在啟動時清除舊版 `window.RF_PVP_WRITE_SECRET`，讓明文密鑰不會持續暴露在 `window`。這些相對網址由 `assets/index.html` 解析，實際檔案固定在 `assets/mods/`，不需要修改 loader。守衛只有在官方 `player medals` 結果證據存在、5v5 聚合完成且來源鍵尚未傳送時才 POST。health heartbeat 只呼叫 `/api/pvp/health`，不傳送遊戲資料；連線失敗時會退避重連且不阻塞遊戲。完整載入順序與本機 bridge fallback 請參閱 [`../bridge/README.md`](../bridge/README.md)。
+`rf_mod_loader.js` 依序載入 `./mods/rf_pvp_backend_config.js`、`./mods/rf_pvp_socket_tap.js`、`./mods/pvp_double_match_guard.js`；Socket 被動觀察器已是獨立 mod，載入器本身只負責一般工具的順序載入。守衛會一次性取用設定並立即移除暫時的全域取用函式。舊版設定檔仍可使用，但守衛會在啟動時清除舊版 `window.RF_PVP_WRITE_SECRET`，讓明文密鑰不會持續暴露在 `window`。這些相對網址由 `assets/index.html` 解析，實際檔案固定在 `assets/mods/`，不需要修改 loader。守衛只有在官方 `player medals` 結果證據存在、5v5 聚合完成且來源鍵尚未傳送時才 POST。health heartbeat 只呼叫 `/api/pvp/health`，不傳送遊戲資料；連線失敗時會退避重連且不阻塞遊戲。完整載入順序與本機 bridge fallback 請參閱 [`../bridge/README.md`](../bridge/README.md)。
 
 ## 安全與限制
 

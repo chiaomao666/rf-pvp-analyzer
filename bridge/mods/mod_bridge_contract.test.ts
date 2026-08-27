@@ -11,11 +11,13 @@ describe("approved PVP mod bridge contract", () => {
     expect(loader).not.toContain('src: "./mods/rf_bridge_client.js"');
     expect(loader).not.toContain("全局記憶體優化器");
     expect(loader).toContain('src: "./mods/rf_pvp_backend_config.js"');
-    expect(loader.indexOf('src: "./mods/rf_pvp_backend_config.js"')).toBeLessThan(loader.indexOf('src: "./mods/pvp_double_match_guard.js"'));
+    expect(loader).toContain('src: "./mods/rf_pvp_socket_tap.js"');
+    expect(loader.indexOf('src: "./mods/rf_pvp_backend_config.js"')).toBeLessThan(loader.indexOf('src: "./mods/rf_pvp_socket_tap.js"'));
+    expect(loader.indexOf('src: "./mods/rf_pvp_socket_tap.js"')).toBeLessThan(loader.indexOf('src: "./mods/pvp_double_match_guard.js"'));
     expect(loader).toContain('src: "./mods/pvp_double_match_guard.js"');
     expect(loader).toContain('async function loadEnabledTools()');
     expect(loader).toContain('await injectScript(tool)');
-    expect(loader).toContain('const pvpPriorityIds = new Set');
+    expect(loader).not.toContain('function installPvpSocketTap');
     expect(guard).toContain("installEmbeddedBridgeClient");
     expect(guard).toContain('body: JSON.stringify(requestBody)');
     expect(guard).toContain('BRIDGE_HEARTBEAT_MS = 30_000');
@@ -33,6 +35,17 @@ describe("approved PVP mod bridge contract", () => {
     expect(guard).toContain('writeSecretState: bridge.writeSecretState || "未知"');
     expect(guard).toContain('bridge: getSafeBridgeDiagnostics()');
     expect(guard).toContain('workspaceId: String(record.sourcePlayerUserId');
+  });
+
+  it("keeps passive WebSocket observation in its own mod, not in the loader", () => {
+    const loader = read("rf_mod_loader.js");
+    const socketTap = readMod("rf_pvp_socket_tap.js");
+    expect(socketTap).toContain("function PassiveObservedWebSocket");
+    expect(socketTap).toContain("window.__RF_PVP_SOCKET_TAP__ = tap");
+    expect(socketTap).toContain('socket.addEventListener("message"');
+    expect(socketTap).not.toContain("PVP_WRITE_SECRET");
+    expect(loader).not.toContain("function PassiveObservedWebSocket");
+    expect(loader).not.toContain("window.__RF_PVP_SOCKET_TAP__ = tap");
   });
 
   it("provides a one-time configurable Worker endpoint without embedding a real credential", () => {

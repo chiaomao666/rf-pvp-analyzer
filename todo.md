@@ -1,5 +1,9 @@
 # Project TODO
 
+- [x] 將 PVP 被動 Socket 觀察器從 `rf_mod_loader.js` 拆為獨立 `assets/mods/` mod，載入器只負責順序載入，守衛維持訂閱同一觀察器。
+
+- [ ] 交付獨立 Socket 觀察器、載入器與相容守衛後，待以固定 `assets/mods/` 目錄實機確認 Socket 觀察器、訊框計數與 5v5 擷取恢復。
+
 - [x] 稽核 mod 設定檔、載入器與 PVP 守衛對 `PVP_WRITE_SECRET` 的讀取、傳輸、快取與診斷輸出，確認未外洩後再提出必要修正。
 
 - [x] 澄清帳號頁網站登出只會清除瀏覽器 session，不會撤銷 mod 的 `PVP_WRITE_SECRET` 寫入授權，避免誤認正常心跳為登入殘留。

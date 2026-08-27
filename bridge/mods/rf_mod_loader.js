@@ -11,6 +11,16 @@ console.log("[LOADER] 小工具載入器啟動");
             css: null,
             enabled: true
         },
+        { id: "PVP Socket 被動觀察器",
+            src: "./mods/rf_pvp_socket_tap.js",
+            css: null,
+            enabled: true
+        },
+        { id: "排名戰重複配對攔截",
+            src: "./mods/pvp_double_match_guard.js",
+            css: null,
+            enabled: true
+        },
         { id: "據點顯示優化",
             src: "./mods/custom_attackmap.js",
             css: "./mods/custom_attackmap.css", 
@@ -86,11 +96,6 @@ console.log("[LOADER] 小工具載入器啟動");
             css: null,
             enabled: false
         },
-        { id: "排名戰重複配對攔截",
-            src: "./mods/pvp_double_match_guard.js",
-            css: null,
-            enabled: true
-        },
         { id: "Mod 效能分析器",
             src: "./mods/rf_mod_profiler.js",
             css: null,
@@ -131,128 +136,6 @@ console.log("[LOADER] 小工具載入器啟動");
         return Object.prototype.hasOwnProperty.call(cfg, tool.id) ? cfg[tool.id] : tool.enabled;
     }
 
-    // PVP 守衛需要在官方主程式建立 Socket 前開始被動觀察，否則舊連線無法補掛 message listener。
-    // 此觀察器不修改、不延遲、也不丟棄任何 WebSocket 封包；它只將排名戰相關的已接收訊框交給守衛。
-    function installPvpSocketTap(){
-        const existingTap = window.__RF_PVP_SOCKET_TAP__;
-        if (existingTap && typeof existingTap.ensure === "function") {
-            existingTap.ensure();
-            return existingTap;
-        }
-        if (existingTap) return existingTap;
-
-        const subscribers = new Set();
-        const stats = { installedAt: Date.now(), socketCount: 0, receivedMessageCount: 0, forwardedFrameCount: 0, candidateFrameCount: 0, lastCandidate: null, reinstallCount: 0 };
-        let ObservedWebSocket = null;
-
-        function decodeFrame(data){
-            if (typeof data !== "string") return { raw: String(data), topic: "", event: "", payload: null };
-            try {
-                const decoded = JSON.parse(data);
-                if (Array.isArray(decoded)) {
-                    return { raw: decoded, topic: String(decoded[2] || ""), event: String(decoded[3] || ""), payload: decoded[4] ?? null };
-                }
-                if (decoded && typeof decoded === "object") {
-                    return {
-                        raw: decoded,
-                        topic: String(decoded.topic || decoded.channel || ""),
-                        event: String(decoded.event || decoded.type || ""),
-                        payload: decoded.payload ?? decoded.data ?? null,
-                    };
-                }
-                return { raw: decoded, topic: "", event: "", payload: null };
-            } catch (error) {
-                return { raw: data, topic: "", event: "", payload: null };
-            }
-        }
-
-        function isPvpFrame(frame){
-            const signature = `${frame.topic} ${frame.event}`.toLowerCase();
-            const isResultPagePlayerFrame = /^player:\d+$/i.test(String(frame.topic || ""))
-                && location.hash.toLowerCase().includes("/pvpresult");
-            return signature.includes("pvp")
-                // 官方結果頁會對 player channel 發出 medals 請求；不同版本的回覆可能是
-                // medals、phx_reply 或 update_data。只在 /pvpresult 時保存 player 封包，避免擴大成全站監聽。
-                || isResultPagePlayerFrame;
-        }
-
-        function summariseCandidate(frame){
-            const payload = frame.payload && typeof frame.payload === "object" && !Array.isArray(frame.payload) ? frame.payload : null;
-            return {
-                diagnosticOnly: true,
-                capturedAt: Date.now(),
-                topic: String(frame.topic || "").replace(/\d+/g, "#").slice(0, 80) || "(none)",
-                event: String(frame.event || "(none)").slice(0, 80),
-                payloadKeys: Object.keys(payload || {}).slice(0, 12),
-                pageHash: location.hash,
-            };
-        }
-
-        function publish(data, url){
-            const frame = decodeFrame(data);
-            stats.receivedMessageCount += 1;
-            const pvpFrame = isPvpFrame(frame);
-            const battlePage = location.hash.toLowerCase().includes("/pvpbattle");
-            if (!pvpFrame && !battlePage) return;
-            const entry = pvpFrame
-                ? { ...frame, capturedAt: Date.now(), socketUrl: url || "", pageHash: location.hash }
-                : summariseCandidate(frame);
-            if (pvpFrame) stats.forwardedFrameCount += 1;
-            else {
-                stats.candidateFrameCount += 1;
-                stats.lastCandidate = entry;
-            }
-            subscribers.forEach((listener) => {
-                try { listener(entry); } catch (error) { console.error("[LOADER] PVP Socket 訂閱者失敗：", error); }
-            });
-        }
-
-        function installObservedConstructor(){
-            const NativeWebSocket = window.WebSocket;
-            if (NativeWebSocket === ObservedWebSocket) return true;
-            if (typeof NativeWebSocket !== "function") {
-                console.warn("[LOADER] 無法安裝 PVP Socket 觀察器：WebSocket 不可用。");
-                return false;
-            }
-
-            function PassiveObservedWebSocket(url, protocols){
-                const socket = arguments.length > 1 ? new NativeWebSocket(url, protocols) : new NativeWebSocket(url);
-                stats.socketCount += 1;
-                // 僅加上一個 message listener；不修改事件內容、不阻擋事件，也不改變 socket 的傳送流程。
-                socket.addEventListener("message", (event) => publish(event.data, socket.url));
-                return socket;
-            }
-
-            PassiveObservedWebSocket.prototype = NativeWebSocket.prototype;
-            Object.setPrototypeOf(PassiveObservedWebSocket, NativeWebSocket);
-            ObservedWebSocket = PassiveObservedWebSocket;
-            window.WebSocket = ObservedWebSocket;
-            stats.reinstallCount += 1;
-            return true;
-        }
-
-        if (!installObservedConstructor()) return null;
-        const tap = {
-            subscribe(listener){
-                subscribers.add(listener);
-                return () => subscribers.delete(listener);
-            },
-            getStatus(){ return { ...stats, active: window.WebSocket === ObservedWebSocket }; },
-            ensure(){ return installObservedConstructor(); },
-        };
-        window.__RF_PVP_SOCKET_TAP__ = tap;
-        // 不使用輪詢或計時器。僅在瀏覽器實際將頁面帶回前景／從 bfcache 還原時，
-        // 再確認未來新建的官方 WebSocket 仍會被被動觀察。
-        const ensureAfterReturn = () => tap.ensure();
-        window.addEventListener("pageshow", ensureAfterReturn);
-        window.addEventListener("focus", ensureAfterReturn);
-        document.addEventListener("visibilitychange", () => {
-            if (!document.hidden) ensureAfterReturn();
-        });
-        console.log("[LOADER] PVP Socket 被動觀察器已預先安裝。");
-        return tap;
-    }
-
     function injectScript(tool){
         if (!tool.src) return Promise.resolve();
         return new Promise((resolve) => {
@@ -285,12 +168,7 @@ console.log("[LOADER] 小工具載入器啟動");
 
     async function loadEnabledTools(){
         const cfg = loadConfig();
-        const pvpPriorityIds = new Set(["RF PVP Worker 連線設定", "排名戰重複配對攔截"]);
-        const orderedTools = [
-            ...TOOLS.filter((tool) => pvpPriorityIds.has(tool.id)),
-            ...TOOLS.filter((tool) => !pvpPriorityIds.has(tool.id)),
-        ];
-        for (const tool of orderedTools) {
+        for (const tool of TOOLS) {
             if (!isEnabled(tool, cfg)) continue;
             if (tool.css) injectStyle(tool);
             if (tool.src) await injectScript(tool);
@@ -394,9 +272,6 @@ console.log("[LOADER] 小工具載入器啟動");
         document.addEventListener("mouseup", function(){ dragging = false; });
     }
 
-    const initialConfig = loadConfig();
-    const pvpGuardTool = TOOLS.find(tool => tool.id === "排名戰重複配對攔截");
-    if (pvpGuardTool && isEnabled(pvpGuardTool, initialConfig)) installPvpSocketTap();
     void loadEnabledTools();
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", buildPanel);

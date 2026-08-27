@@ -218,7 +218,7 @@
   let currentBattleChannel = null;
   let uiPanel = null;
   let transportAttached = false;
-  let transportMessage = "等待載入器預先安裝 Socket 觀察器";
+  let transportMessage = "等待 PVP Socket 被動觀察器 mod";
   let subscribedTransportTap = null;
   let unsubscribeTransport = null;
   let capturedSinceLoad = 0;
@@ -969,7 +969,7 @@
   function attachTransportTap(reason = "initial") {
     const tap = window.__RF_PVP_SOCKET_TAP__;
     if (!tap || typeof tap.subscribe !== "function") {
-      transportMessage = "未偵測到預先安裝的 Socket 觀察器；請更新載入器並完整重新整理";
+      transportMessage = "未偵測到 PVP Socket 被動觀察器 mod；請確認已啟用並完整重新整理";
       transportAttached = false;
       console.warn(`[${MOD_NAME}] ${transportMessage}`);
       updateUIPanel();

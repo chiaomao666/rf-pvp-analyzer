@@ -69,7 +69,7 @@ Bridge 不會把事件轉送到官方伺服器，也不會取代官方登入與 
 
 ## Modified mod bundle
 
-The ready-to-copy files are in `bridge/mods/`. The panel loader keeps its tool list in `rf_mod_loader.js`; the PVP backend settings are a separate file at `bridge/mods/rf_pvp_backend_config.js` and are loaded before `pvp_double_match_guard.js`. The browser-side bridge client is embedded inside the guard, so `rf_bridge_client.js` is no longer required. `rf-bridge.mjs` is intentionally kept as a separate Node process because it binds the localhost port and cannot run inside a browser mod.
+The ready-to-copy files are in `bridge/mods/`. The panel loader keeps its tool list in `rf_mod_loader.js`; the PVP backend settings are a separate private file at `bridge/mods/rf_pvp_backend_config.js`, the passive Socket observer is its own `rf_pvp_socket_tap.js` mod, and the PVP guard loads after both. The loader contains no PVP Socket interception code; it only loads enabled tools in order. The browser-side bridge client is embedded inside the guard, so `rf_bridge_client.js` is no longer required. `rf-bridge.mjs` is intentionally kept as a separate Node process because it binds the localhost port and cannot run inside a browser mod.
 
 ## 直接後端模式：自建 Cloudflare Worker
 
@@ -79,6 +79,7 @@ The ready-to-copy files are in `bridge/mods/`. The panel loader keeps its tool l
 assets/
   mods/
     rf_mod_loader.js
+    rf_pvp_socket_tap.js
     pvp_double_match_guard.js
     rf_pvp_backend_config.js
 ```
@@ -90,7 +91,7 @@ window.RF_PVP_BACKEND_ENDPOINT = "https://rf-pvp-analyzer-api.<你的-subdomain>
 window.RF_PVP_WRITE_SECRET = "只保存於你自己的本機 mod 設定";
 ```
 
-`rf_mod_loader.js` 會先載入 `./mods/rf_pvp_backend_config.js`，再載入 `./mods/pvp_double_match_guard.js`。這些是由 `assets/index.html` 解析的相對網址，兩個檔案實際固定放在 `assets/mods/`。
+`rf_mod_loader.js` 會依序載入 `./mods/rf_pvp_backend_config.js`、`./mods/rf_pvp_socket_tap.js`、`./mods/pvp_double_match_guard.js`。這些是由 `assets/index.html` 解析的相對網址，三個檔案實際固定放在 `assets/mods/`。`rf_pvp_socket_tap.js` 是獨立的被動觀察 mod；它只為守衛提供已接收 WebSocket 訊框的訂閱來源，不會修改、阻擋、重送或延遲遊戲封包。
 
 摘要包含 `workspaceId`、模式、勝負、雙方最多五名成員、排名／分數變化及去重來源鍵；不包含密碼、user token、cookie、raw WebSocket frame 或完整原始事件。Worker 提供 `GET /api/pvp/health`、`POST /api/pvp/capture` 與 `GET /api/pvp/events?workspaceId=...&after=...`，資料由 D1 持久化。完整 Cloudflare 與 GitHub Actions 設定請參閱 [`../backend/README.md`](../backend/README.md)。
 
