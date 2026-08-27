@@ -108,14 +108,14 @@ Pages workflow 會讀取 repository variable `PVP_BACKEND_ORIGIN`，並在 `pnpm
 
 ## mod 設定
 
-請將 `rf_pvp_backend_config.js` 固定放在 `assets/mods/rf_pvp_backend_config.js`，並只在該檔案設定 endpoint 與 `PVP_WRITE_SECRET`：
+請將範本 `bridge/mods/rf_pvp_backend_config.example.js` 複製為 `assets/mods/rf_pvp_backend_config.js`，並只在該**私人的本機設定檔**填入 endpoint 與 `PVP_WRITE_SECRET`。實際檔名已由 `.gitignore` 排除，GitHub 只保留不含真實密鑰的 `.example.js` 範本：
 
 ```
-window.RF_PVP_BACKEND_ENDPOINT = "https://rf-pvp-analyzer-api.<你的-subdomain>.workers.dev/api/pvp/capture";
-window.RF_PVP_WRITE_SECRET = "只放在你自己的瀏覽器 mod 設定";
+const WORKER_ORIGIN = "https://rf-pvp-analyzer-api.<你的-subdomain>.workers.dev";
+const WRITE_SECRET = "只放在你自己的瀏覽器 mod 設定";
 ```
 
-`rf_mod_loader.js` 會先載入 `./mods/rf_pvp_backend_config.js` ，再載入 `pvp_double_match_guard.js`；這些相對網址由 `assets/index.html` 解析，實際檔案固定在 `assets/mods/`，不需要修改 loader。守衛只有在官方 `player medals` 結果證據存在、5v5 聚合完成且來源鍵尚未傳送時才 POST。health heartbeat 只呼叫 `/api/pvp/health`，不傳送遊戲資料；連線失敗時會退避重連且不阻塞遊戲。完整載入順序與本機 bridge fallback 請參閱 [`../bridge/README.md`](../bridge/README.md)。
+`rf_mod_loader.js` 會先載入 `./mods/rf_pvp_backend_config.js`，再載入 `pvp_double_match_guard.js`；守衛會一次性取用設定並立即移除暫時的全域取用函式。舊版設定檔仍可使用，但守衛會在啟動時清除舊版 `window.RF_PVP_WRITE_SECRET`，讓明文密鑰不會持續暴露在 `window`。這些相對網址由 `assets/index.html` 解析，實際檔案固定在 `assets/mods/`，不需要修改 loader。守衛只有在官方 `player medals` 結果證據存在、5v5 聚合完成且來源鍵尚未傳送時才 POST。health heartbeat 只呼叫 `/api/pvp/health`，不傳送遊戲資料；連線失敗時會退避重連且不阻塞遊戲。完整載入順序與本機 bridge fallback 請參閱 [`../bridge/README.md`](../bridge/README.md)。
 
 ## 安全與限制
 

@@ -14,6 +14,9 @@ build/
 .env.test.local
 .env.production.local
 
+# Private mod write credential. Commit the .example.js template only.
+bridge/mods/rf_pvp_backend_config.js
+
 # IDE and editor files
 .vscode/
 .idea/

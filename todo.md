@@ -1,5 +1,7 @@
 # Project TODO
 
+- [x] 稽核 mod 設定檔、載入器與 PVP 守衛對 `PVP_WRITE_SECRET` 的讀取、傳輸、快取與診斷輸出，確認未外洩後再提出必要修正。
+
 - [x] 澄清帳號頁網站登出只會清除瀏覽器 session，不會撤銷 mod 的 `PVP_WRITE_SECRET` 寫入授權，避免誤認正常心跳為登入殘留。
 
 - [x] 診斷已部署 Worker 回傳 `PVP_ADMIN_PASSWORD must be configured` 的 503 問題，確認 Cloudflare Secret 已綁定至正確 Worker 與部署版本。

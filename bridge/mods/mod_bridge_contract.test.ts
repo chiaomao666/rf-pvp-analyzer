@@ -35,11 +35,18 @@ describe("approved PVP mod bridge contract", () => {
     expect(guard).toContain('workspaceId: String(record.sourcePlayerUserId');
   });
 
-  it("provides a configurable Worker endpoint without embedding a real credential", () => {
-    const config = readMod("rf_pvp_backend_config.js");
+  it("provides a one-time configurable Worker endpoint without embedding a real credential", () => {
+    const config = readMod("rf_pvp_backend_config.example.js");
+    const guard = read("pvp_double_match_guard.js");
     expect(config).toContain("/api/pvp/capture");
     expect(config).toContain("PASTE_YOUR_PVP_WRITE_SECRET_HERE");
+    expect(config).toContain("__RF_PVP_CONSUME_BACKEND_CONFIG__");
+    expect(config).not.toContain("window.RF_PVP_WRITE_SECRET =");
     expect(config).not.toMatch(/sk_live|Bearer\s+[A-Za-z0-9._-]{20,}/i);
+    expect(guard).toContain("takePvpBackendConfig");
+    expect(guard).toContain("delete window.__RF_PVP_CONSUME_BACKEND_CONFIG__");
+    expect(guard).toContain("delete window.RF_PVP_WRITE_SECRET");
+    expect(guard).toContain("const CONFIGURED_WRITE_SECRET = STARTUP_BRIDGE_CONFIG.writeSecret");
   });
 
   it("only forwards records after official player medals evidence", () => {

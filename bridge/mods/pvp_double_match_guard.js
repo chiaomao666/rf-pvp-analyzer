@@ -2,8 +2,51 @@
   "use strict";
 
   // 瀏覽器側 bridge client 內嵌於本守衛；Node localhost server 仍維持獨立檔案。
-  const BRIDGE_ENDPOINT = window.RF_PVP_BACKEND_ENDPOINT || "https://rf-pvp-analyzer-api.chengyen1209.workers.dev/api/pvp/capture";
+  const DEFAULT_BRIDGE_ENDPOINT = "https://rf-pvp-analyzer-api.chengyen1209.workers.dev/api/pvp/capture";
   const LOCAL_BRIDGE_ENDPOINT = "http://127.0.0.1:8787/v1/capture";
+  // 設定檔先於守衛載入。新版設定檔只提供一次性取用函式；守衛取用後立即移除它。
+  // 舊版設定檔仍可相容讀取，但也會在啟動時清除 window 上的明文密鑰。
+  function takePvpBackendConfig() {
+    const hasOwn = (key) => Object.prototype.hasOwnProperty.call(window, key);
+    const readText = (value) => typeof value === "string" ? value.trim() : "";
+    const clearLegacyWriteSecret = () => {
+      if (!hasOwn("RF_PVP_WRITE_SECRET")) return;
+      try { delete window.RF_PVP_WRITE_SECRET; } catch (_) { /* best effort */ }
+      if (hasOwn("RF_PVP_WRITE_SECRET")) {
+        try { window.RF_PVP_WRITE_SECRET = ""; } catch (_) { /* best effort */ }
+      }
+    };
+
+    const consume = window.__RF_PVP_CONSUME_BACKEND_CONFIG__;
+    if (typeof consume === "function") {
+      try {
+        const supplied = consume();
+        if (supplied && typeof supplied === "object") {
+          return {
+            loaded: true,
+            endpoint: readText(supplied.endpoint),
+            writeSecret: readText(supplied.writeSecret),
+          };
+        }
+      } catch (error) {
+        console.warn("[RF bridge] 無法讀取 PVP backend 設定：", error?.message || error);
+      } finally {
+        try { delete window.__RF_PVP_CONSUME_BACKEND_CONFIG__; } catch (_) { /* best effort */ }
+        clearLegacyWriteSecret();
+      }
+    }
+
+    const config = {
+      loaded: hasOwn("RF_PVP_BACKEND_ENDPOINT") || hasOwn("RF_PVP_WRITE_SECRET"),
+      endpoint: readText(window.RF_PVP_BACKEND_ENDPOINT),
+      writeSecret: readText(window.RF_PVP_WRITE_SECRET),
+    };
+    clearLegacyWriteSecret();
+    return config;
+  }
+  const STARTUP_BRIDGE_CONFIG = takePvpBackendConfig();
+  const BRIDGE_ENDPOINT = STARTUP_BRIDGE_CONFIG.endpoint || DEFAULT_BRIDGE_ENDPOINT;
+  const CONFIGURED_WRITE_SECRET = STARTUP_BRIDGE_CONFIG.writeSecret;
   const BRIDGE_ALLOWED_KEYS = [
     "battleAt", "mode", "outcome", "playerTeam", "opponentTeam", "playerName", "playerUnion", "opponentName", "opponentUnion",
     "rankBefore", "rankAfter", "scoreBefore", "scoreAfter", "notes",
@@ -39,15 +82,12 @@
       return endpoint.replace(/\/$/, "") + "/health";
     };
     const getWriteSecretState = () => {
-      if (!Object.prototype.hasOwnProperty.call(window, "RF_PVP_WRITE_SECRET")) {
+      if (!STARTUP_BRIDGE_CONFIG.loaded) {
         return "設定檔未載入或載入順序錯誤";
       }
-      if (typeof window.RF_PVP_WRITE_SECRET !== "string") {
-        return "設定檔的寫入密鑰格式不正確";
-      }
-      return window.RF_PVP_WRITE_SECRET.trim() ? "已設定" : "設定檔已載入，但密鑰是空白或 placeholder";
+      return CONFIGURED_WRITE_SECRET ? "已設定" : "設定檔已載入，但密鑰是空白或 placeholder";
     };
-    const getWriteSecret = () => typeof window.RF_PVP_WRITE_SECRET === "string" ? window.RF_PVP_WRITE_SECRET.trim() : "";
+    const getWriteSecret = () => CONFIGURED_WRITE_SECRET;
     const getWriteHeaders = () => {
       const writeSecret = getWriteSecret();
       return writeSecret ? { "X-RF-Write-Secret": writeSecret } : {};
@@ -101,7 +141,7 @@
       }
     };
     const sendMatch = async (summary) => {
-      const endpoint = window.RF_PVP_BACKEND_ENDPOINT || BRIDGE_ENDPOINT;
+      const endpoint = BRIDGE_ENDPOINT;
       if (!getWriteSecret()) {
         setStatus("reconnecting", `PVP 寫入密鑰：${getWriteSecretState()}；無法上傳戰績`, "PVP_WRITE_SECRET not configured");
         throw new Error("PVP_WRITE_SECRET not configured");
