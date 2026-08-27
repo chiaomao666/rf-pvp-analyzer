@@ -1,7 +1,16 @@
 # Project TODO
 
+- [x] 新增僅限已登入 session 使用者的網站端密碼變更功能，將密碼以雜湊保存於 D1，保留 `PVP_SESSION_SECRET` 與 `PVP_WRITE_SECRET` 的 Cloudflare Secret 隔離。
+
+- [x] 新增與一般網站登入密碼分離的 `PVP_ADMIN_PASSWORD` 驗證，避免知道共用網站密碼的使用者變更全域登入設定。
+- [x] 為 D1 管理密碼新增 salt、PBKDF2 verifier 與 revision migration，並讓變更後的既有網站 session 立即失效。
+- [x] 在帳號頁已登入狀態下新增管理者密碼變更表單，且不將任何密碼或 token 寫入前端儲存。
+- [x] 補齊 Worker、前端與部署說明的密碼管理回歸測試並推送 GitHub。
+- [ ] 提交並推送網站密碼管理變更到 `github/main`，不得提交 `.notes/` 或任何使用者設定檔。
+- [ ] 確認 GitHub Actions 先套用 D1 migration，再成功部署 GitHub Pages 與 Cloudflare Worker。
+
 - [x] 讓 Worker `/api/pvp/login` 安全區分 `PVP_SITE_PASSWORD` 或 `PVP_SESSION_SECRET` 缺失的設定錯誤與使用者密碼不符，避免兩者皆誤報 401。
-- [ ] 在最新 Worker 部署後，以使用者目前的網站密碼重新登入，依 HTTP 503／401／200 結果判定 Cloudflare Secret 缺失、密碼不符或登入成功。
+- [x] 在最新 Worker 部署後，以使用者目前的網站密碼重新登入，依 HTTP 503／401／200 結果判定 Cloudflare Secret 缺失、密碼不符或登入成功。
 
 - [ ] 在使用者重建 Cloudflare 的 `PVP_SITE_PASSWORD`、`PVP_SESSION_SECRET`、`PVP_WRITE_SECRET` 後，重新對應網站登入密碼與本機 mod 寫入密鑰，並驗證登入與 heartbeat 恢復。
 

@@ -2,12 +2,34 @@ import { describe, expect, it, vi } from "vitest";
 import worker from "./index.mjs";
 
 function env() {
+  const state = { credential: null };
+  const prepare = vi.fn((sql) => {
+    let values = [];
+    return {
+      bind(...next) { values = next; return this; },
+      first: vi.fn(async () => {
+        if (sql === "SELECT password_salt, password_verifier, revision FROM pvp_site_credentials WHERE id = 1") return state.credential;
+        if (sql === "SELECT 1 AS ok") return { ok: 1 };
+        return { ok: 1 };
+      }),
+      all: vi.fn().mockResolvedValue({ results: [] }),
+      run: vi.fn(async () => {
+        if (sql.startsWith("INSERT INTO pvp_site_credentials")) {
+          const [password_salt, password_verifier, revision, updated_at] = values;
+          state.credential = { password_salt, password_verifier, revision, updated_at };
+        }
+        return { meta: { last_row_id: 1 } };
+      }),
+    };
+  });
   return {
     PVP_SITE_PASSWORD: "site-password",
     PVP_SESSION_SECRET: "session-secret-for-tests",
     PVP_WRITE_SECRET: "write-secret",
+    PVP_ADMIN_PASSWORD: "admin-password",
     ALLOWED_ORIGINS: "https://chiaomao666.github.io",
-    DB: { prepare: vi.fn(() => ({ first: vi.fn().mockResolvedValue({ ok: 1 }), all: vi.fn().mockResolvedValue({ results: [] }), bind: vi.fn(function () { return this; }), run: vi.fn().mockResolvedValue({ meta: { last_row_id: 1 } }) })) },
+    DB: { prepare },
+    __state: state,
   };
 }
 
@@ -18,10 +40,14 @@ function request(path, init = {}) {
   });
 }
 
-async function login(current) {
-  const response = await worker.fetch(request("/api/pvp/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: "site-password" }) }), current);
+async function login(current, password = "site-password") {
+  const response = await worker.fetch(request("/api/pvp/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) }), current);
   expect(response.status).toBe(200);
   return response.headers.get("set-cookie");
+}
+
+function changePassword(current, cookie, body) {
+  return worker.fetch(request("/api/pvp/password", { method: "POST", headers: { "Content-Type": "application/json", Cookie: cookie }, body: JSON.stringify(body) }), current);
 }
 
 describe("PVP Worker security boundary", () => {
@@ -38,7 +64,7 @@ describe("PVP Worker security boundary", () => {
     expect(current.DB.prepare).not.toHaveBeenCalled();
   });
 
-  it("authenticates the site password and returns an HttpOnly session", async () => {
+  it("authenticates the legacy Cloudflare site password and returns an HttpOnly session", async () => {
     const current = env();
     const response = await worker.fetch(request("/api/pvp/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: "site-password" }) }), current);
     expect(response.status).toBe(200);
@@ -50,7 +76,7 @@ describe("PVP Worker security boundary", () => {
     expect(response.headers.get("access-control-allow-credentials")).toBe("true");
   });
 
-  it("returns a generic service error when a login secret is missing", async () => {
+  it("returns a generic service error when the legacy login configuration is missing", async () => {
     const withoutSessionSecret = env(); delete withoutSessionSecret.PVP_SESSION_SECRET;
     const response = await worker.fetch(request("/api/pvp/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: "site-password" }) }), withoutSessionSecret);
     expect(response.status).toBe(503);
@@ -61,6 +87,51 @@ describe("PVP Worker security boundary", () => {
     const response = await worker.fetch(request("/api/pvp/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: "wrong-password" }) }), env());
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toEqual({ error: "unauthorized" });
+  });
+
+  it("rejects unauthenticated password changes without reading credentials", async () => {
+    const current = env();
+    const response = await worker.fetch(request("/api/pvp/password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ adminPassword: "admin-password", currentPassword: "site-password", newPassword: "new-password-123" }) }), current);
+    expect(response.status).toBe(401);
+    expect(current.__state.credential).toBeNull();
+  });
+
+  it("requires a configured admin password before any authenticated change", async () => {
+    const current = env(); delete current.PVP_ADMIN_PASSWORD;
+    const cookie = await login(current);
+    const response = await changePassword(current, cookie, { adminPassword: "admin-password", currentPassword: "site-password", newPassword: "new-password-123" });
+    expect(response.status).toBe(503);
+    expect(current.__state.credential).toBeNull();
+  });
+
+  it("requires both the management password and current site password", async () => {
+    const current = env();
+    const cookie = await login(current);
+    const wrongAdmin = await changePassword(current, cookie, { adminPassword: "wrong", currentPassword: "site-password", newPassword: "new-password-123" });
+    expect(wrongAdmin.status).toBe(401);
+    const wrongCurrent = await changePassword(current, cookie, { adminPassword: "admin-password", currentPassword: "wrong", newPassword: "new-password-123" });
+    expect(wrongCurrent.status).toBe(401);
+    expect(current.__state.credential).toBeNull();
+  });
+
+  it("stores a salted verifier, switches login to D1, and invalidates earlier sessions", async () => {
+    const current = env();
+    const oldCookie = await login(current);
+    const response = await changePassword(current, oldCookie, { adminPassword: "admin-password", currentPassword: "site-password", newPassword: "new-password-123" });
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ updated: true });
+    expect(response.headers.get("set-cookie")).toMatch(/Max-Age=0/);
+    expect(current.__state.credential).toMatchObject({ revision: 1 });
+    expect(current.__state.credential.password_salt).not.toContain("new-password-123");
+    expect(current.__state.credential.password_verifier).not.toContain("new-password-123");
+
+    const expired = await worker.fetch(request("/api/pvp/session", { headers: { Cookie: oldCookie } }), current);
+    expect(expired.status).toBe(401);
+    const oldLogin = await worker.fetch(request("/api/pvp/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: "site-password" }) }), current);
+    expect(oldLogin.status).toBe(401);
+    const newCookie = await login(current, "new-password-123");
+    const active = await worker.fetch(request("/api/pvp/session", { headers: { Cookie: newCookie } }), current);
+    expect(active.status).toBe(200);
   });
 
   it("clears the same partitioned cookie on logout", async () => {

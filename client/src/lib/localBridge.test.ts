@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { checkLocalBridge, getBridgeMode, isLocalBridgeEnabled, localBridgeOrigin, loginRemoteSite, pollLocalBridge } from "./localBridge";
+import { changeRemoteSitePassword, checkLocalBridge, getBridgeMode, isLocalBridgeEnabled, localBridgeOrigin, loginRemoteSite, pollLocalBridge } from "./localBridge";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -117,6 +117,28 @@ describe("local bridge client", () => {
     vi.stubEnv("VITE_PVP_BACKEND_ORIGIN", "https://rf-pvp-api.example.workers.dev");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "authentication configuration unavailable" }), { status: 503 })));
     await expect(loginRemoteSite("site-password")).rejects.toThrow("PVP_SITE_PASSWORD 與 PVP_SESSION_SECRET 已儲存並部署");
+  });
+
+  it("changes the site password through the session-authorized Worker endpoint without retaining passwords", async () => {
+    vi.stubEnv("VITE_PVP_BACKEND_ORIGIN", "https://rf-pvp-api.example.workers.dev");
+    const localStorage = new Map<string, string>([["rf-pvp-site-session-active", "true"]]);
+    vi.stubGlobal("window", { localStorage: { getItem: (key: string) => localStorage.get(key) ?? null, setItem: (key: string, value: string) => localStorage.set(key, value), removeItem: (key: string) => localStorage.delete(key) }, dispatchEvent: vi.fn() });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ updated: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(changeRemoteSitePassword({ adminPassword: "admin-password", currentPassword: "site-password", newPassword: "new-password-123" })).resolves.toBe(true);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe("https://rf-pvp-api.example.workers.dev/api/pvp/password");
+    expect(JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body))).toEqual({ adminPassword: "admin-password", currentPassword: "site-password", newPassword: "new-password-123" });
+    expect((fetchMock.mock.calls[0]?.[1] as RequestInit).credentials).toBe("include");
+    expect(localStorage.get("rf-pvp-site-session-active")).toBeUndefined();
+    expect([...localStorage.values()]).not.toContain("admin-password");
+    expect([...localStorage.values()]).not.toContain("new-password-123");
+  });
+
+  it("explains when the management password is not configured", async () => {
+    vi.stubEnv("VITE_PVP_BACKEND_ORIGIN", "https://rf-pvp-api.example.workers.dev");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "authentication configuration unavailable" }), { status: 503 })));
+    await expect(changeRemoteSitePassword({ adminPassword: "admin-password", currentPassword: "site-password", newPassword: "new-password-123" })).rejects.toThrow("PVP_ADMIN_PASSWORD 已儲存並部署");
   });
 
   it("does not retain the former Manus backend origin", () => {

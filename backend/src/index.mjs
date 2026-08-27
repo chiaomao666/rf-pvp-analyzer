@@ -3,6 +3,9 @@ const ALLOWED_MODES = new Set(["1v1", "3v3", "5v5"]);
 const ALLOWED_OUTCOMES = new Set(["win", "loss", "draw", "unknown"]);
 const SESSION_COOKIE = "rf_pvp_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
+const PASSWORD_KDF_ITERATIONS = 100_000;
+const PASSWORD_KDF_BYTES = 32;
+const MIN_SITE_PASSWORD_LENGTH = 12;
 
 function asObject(value) { return value && typeof value === "object" && !Array.isArray(value) ? value : null; }
 function safeText(value, max = 200) { return typeof value === "string" && value.trim() ? value.trim().slice(0, max) : undefined; }
@@ -44,11 +47,39 @@ function bytesToBase64Url(bytes) { let binary = ""; for (const byte of bytes) bi
 function base64UrlToBytes(value) { const normalized = value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - value.length % 4) % 4); const binary = atob(normalized); return Uint8Array.from(binary, (char) => char.charCodeAt(0)); }
 async function hmac(value, secret) { const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]); return new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value))); }
 async function sameSecret(value, expected, secret) { if (!value || !expected || !secret) return false; const actual = await hmac(value, secret); const target = await hmac(expected, secret); if (actual.length !== target.length) return false; let difference = 0; for (let index = 0; index < actual.length; index += 1) difference |= actual[index] ^ target[index]; return difference === 0; }
-async function createSession(env) { const payload = bytesToBase64Url(new TextEncoder().encode(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS }))); const signature = bytesToBase64Url(await hmac(payload, secretValue(env, "PVP_SESSION_SECRET"))); return `${payload}.${signature}`; }
+function sameBytes(actual, target) { if (actual.length !== target.length) return false; let difference = 0; for (let index = 0; index < actual.length; index += 1) difference |= actual[index] ^ target[index]; return difference === 0; }
+async function passwordVerifier(password, salt) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+  return new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: PASSWORD_KDF_ITERATIONS }, key, PASSWORD_KDF_BYTES * 8));
+}
+function credentialFromRow(row) {
+  const salt = typeof row?.password_salt === "string" ? row.password_salt : "";
+  const verifier = typeof row?.password_verifier === "string" ? row.password_verifier : "";
+  const revision = Number(row?.revision);
+  return salt && verifier && Number.isSafeInteger(revision) && revision > 0 ? { salt, verifier, revision } : null;
+}
+async function readSiteCredential(env) { return credentialFromRow(await env.DB.prepare("SELECT password_salt, password_verifier, revision FROM pvp_site_credentials WHERE id = 1").first()); }
+async function verifyManagedPassword(password, credential) {
+  if (!password || !credential) return false;
+  try { return sameBytes(await passwordVerifier(password, base64UrlToBytes(credential.salt)), base64UrlToBytes(credential.verifier)); } catch { return false; }
+}
+async function verifySitePassword(password, env, credential) {
+  credential = credential || await readSiteCredential(env);
+  if (credential) return verifyManagedPassword(password, credential);
+  const sitePassword = secretValue(env, "PVP_SITE_PASSWORD"); const sessionSecret = secretValue(env, "PVP_SESSION_SECRET");
+  if (!sitePassword || !sessionSecret) return null;
+  return sameSecret(password, sitePassword, sessionSecret);
+}
+async function createSession(env, revision) { const payload = bytesToBase64Url(new TextEncoder().encode(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS, rev: revision }))); const signature = bytesToBase64Url(await hmac(payload, secretValue(env, "PVP_SESSION_SECRET"))); return `${payload}.${signature}`; }
 async function hasSiteSession(request, env) {
   const token = cookieValue(request, SESSION_COOKIE); const [payload, signature] = token.split("."); const sessionSecret = secretValue(env, "PVP_SESSION_SECRET"); if (!payload || !signature || !sessionSecret) return false;
   const expected = bytesToBase64Url(await hmac(payload, sessionSecret)); if (!(await sameSecret(signature, expected, sessionSecret))) return false;
-  try { return Number(JSON.parse(new TextDecoder().decode(base64UrlToBytes(payload))).exp) > Math.floor(Date.now() / 1000); } catch { return false; }
+  try {
+    const session = JSON.parse(new TextDecoder().decode(base64UrlToBytes(payload)));
+    if (Number(session.exp) <= Math.floor(Date.now() / 1000)) return false;
+    const credential = await readSiteCredential(env);
+    return credential ? Number(session.rev) === credential.revision : Number(session.rev || 0) === 0;
+  } catch { return false; }
 }
 // GitHub Pages 與 workers.dev 是跨 site；Partitioned 讓 Chromium 在第三方 Cookie
 // 限制下仍能把這顆 host-only session cookie 限定給目前的 Pages top-level site。
@@ -64,14 +95,30 @@ export default {
     try {
       if (request.method === "POST" && url.pathname === "/api/pvp/login") {
         const body = asObject(await readBody(request)); const password = typeof body?.password === "string" ? body.password : "";
-        const sitePassword = secretValue(env, "PVP_SITE_PASSWORD"); const sessionSecret = secretValue(env, "PVP_SESSION_SECRET");
-        if (!sitePassword || !sessionSecret) return json({ error: "authentication configuration unavailable" }, 503, headers);
-        const valid = await sameSecret(password, sitePassword, sessionSecret);
+        const sessionSecret = secretValue(env, "PVP_SESSION_SECRET"); if (!sessionSecret) return json({ error: "authentication configuration unavailable" }, 503, headers);
+        const credential = await readSiteCredential(env); const valid = await verifySitePassword(password, env, credential);
+        if (valid === null) return json({ error: "authentication configuration unavailable" }, 503, headers);
         if (!valid) return json({ error: "unauthorized" }, 401, headers);
-        const token = await createSession(env); return json({ authenticated: true }, 200, { ...headers, "set-cookie": sessionCookie(token) });
+        const token = await createSession(env, credential?.revision || 0); return json({ authenticated: true }, 200, { ...headers, "set-cookie": sessionCookie(token) });
       }
       if (request.method === "POST" && url.pathname === "/api/pvp/logout") return json({ authenticated: false }, 200, { ...headers, "set-cookie": clearSessionCookie() });
       if (request.method === "GET" && url.pathname === "/api/pvp/session") return (await hasSiteSession(request, env)) ? json({ authenticated: true }, 200, headers) : json({ error: "unauthorized" }, 401, headers);
+      if (request.method === "POST" && url.pathname === "/api/pvp/password") {
+        if (!(await hasSiteSession(request, env))) return json({ error: "unauthorized" }, 401, headers);
+        const body = asObject(await readBody(request)); const adminPassword = typeof body?.adminPassword === "string" ? body.adminPassword : "";
+        const currentPassword = typeof body?.currentPassword === "string" ? body.currentPassword : "";
+        const newPassword = typeof body?.newPassword === "string" ? body.newPassword : "";
+        const sessionSecret = secretValue(env, "PVP_SESSION_SECRET"); const configuredAdminPassword = secretValue(env, "PVP_ADMIN_PASSWORD");
+        if (!sessionSecret || !configuredAdminPassword) return json({ error: "authentication configuration unavailable" }, 503, headers);
+        if (newPassword.length < MIN_SITE_PASSWORD_LENGTH || newPassword.length > 256) return json({ error: "invalid password" }, 400, headers);
+        const credential = await readSiteCredential(env); const validCurrent = await verifySitePassword(currentPassword, env, credential);
+        const validAdmin = await sameSecret(adminPassword, configuredAdminPassword, sessionSecret);
+        if (validCurrent === null) return json({ error: "authentication configuration unavailable" }, 503, headers);
+        if (!validCurrent || !validAdmin) return json({ error: "unauthorized" }, 401, headers);
+        const salt = crypto.getRandomValues(new Uint8Array(16)); const verifier = await passwordVerifier(newPassword, salt); const revision = (credential?.revision || 0) + 1;
+        await env.DB.prepare("INSERT INTO pvp_site_credentials (id, password_salt, password_verifier, revision, updated_at) VALUES (1, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET password_salt = excluded.password_salt, password_verifier = excluded.password_verifier, revision = excluded.revision, updated_at = excluded.updated_at").bind(bytesToBase64Url(salt), bytesToBase64Url(verifier), revision, Date.now()).run();
+        return json({ updated: true }, 200, { ...headers, "set-cookie": clearSessionCookie() });
+      }
       if (request.method === "GET" && url.pathname === "/api/pvp/health") {
         const siteAuthorized = await hasSiteSession(request, env);
         if (!siteAuthorized && !writeAuthorized(request, env)) return json({ error: "unauthorized" }, 401, headers);

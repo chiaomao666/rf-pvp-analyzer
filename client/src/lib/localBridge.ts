@@ -9,6 +9,7 @@ export type LocalBridgeStatus = "disabled" | "checking" | "online" | "offline";
 export type LocalBridgeHealth = { ok: boolean; durable?: boolean };
 export type BridgeMode = "local" | "remote";
 export type BridgeSyncSnapshot = { status: LocalBridgeStatus; mode: BridgeMode; origin: string; lastSyncAt?: number; latestEventId?: number; error?: string };
+export type ChangeRemoteSitePasswordInput = { adminPassword: string; currentPassword: string; newPassword: string };
 const syncSnapshot: BridgeSyncSnapshot = { status: "disabled", mode: "local", origin: "http://127.0.0.1:8787" };
 export function getBridgeSyncSnapshot(): BridgeSyncSnapshot { return { ...syncSnapshot, mode: getBridgeMode(), origin: bridgeOrigin(getBridgeMode()) }; }
 export function setBridgeSyncSnapshot(next: Partial<BridgeSyncSnapshot>) { Object.assign(syncSnapshot, next); if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("rf-pvp-bridge-status", { detail: getBridgeSyncSnapshot() })); }
@@ -74,6 +75,17 @@ export async function logoutRemoteSite() {
   if (remoteBridgeOrigin()) await request(remoteEndpoint("/api/pvp/logout"), { method: "POST", headers: remoteHeaders() }).catch(() => undefined);
   setRemoteSiteSessionActive(false);
   console.info("[RF PVP] 網站已登出，session 已清除", { at: new Date().toISOString() });
+}
+export async function changeRemoteSitePassword(input: ChangeRemoteSitePasswordInput) {
+  if (!remoteBridgeOrigin()) throw new Error("尚未設定網站後端網址");
+  const response = await request(remoteEndpoint("/api/pvp/password"), { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(input) });
+  if (!response.ok) {
+    console.warn("[RF PVP] 網站密碼變更失敗", { status: response.status, at: new Date().toISOString() });
+    throw new Error(response.status === 401 ? "管理者密碼、目前網站密碼錯誤，或網站登入已過期" : response.status === 400 ? "新網站密碼必須介於 12 至 256 個字元" : response.status === 503 ? "網站密碼管理尚未完成設定。請確認 Cloudflare 的 PVP_ADMIN_PASSWORD 已儲存並部署。" : `網站密碼變更 HTTP ${response.status}`);
+  }
+  setRemoteSiteSessionActive(false);
+  console.info("[RF PVP] 網站密碼已變更，既有 session 已失效", { at: new Date().toISOString() });
+  return true;
 }
 export async function checkRemoteSiteSession() {
   if (!remoteBridgeOrigin()) return false;
