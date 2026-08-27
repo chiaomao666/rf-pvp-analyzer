@@ -6,8 +6,8 @@
 - [x] 為 D1 管理密碼新增 salt、PBKDF2 verifier 與 revision migration，並讓變更後的既有網站 session 立即失效。
 - [x] 在帳號頁已登入狀態下新增管理者密碼變更表單，且不將任何密碼或 token 寫入前端儲存。
 - [x] 補齊 Worker、前端與部署說明的密碼管理回歸測試並推送 GitHub。
-- [ ] 提交並推送網站密碼管理變更到 `github/main`，不得提交 `.notes/` 或任何使用者設定檔。
-- [ ] 確認 GitHub Actions 先套用 D1 migration，再成功部署 GitHub Pages 與 Cloudflare Worker。
+- [x] 提交並推送網站密碼管理變更到 `github/main`，不得提交 `.notes/` 或任何使用者設定檔。
+- [x] 確認 GitHub Actions 先套用 D1 migration，再成功部署 GitHub Pages 與 Cloudflare Worker。
 
 - [x] 讓 Worker `/api/pvp/login` 安全區分 `PVP_SITE_PASSWORD` 或 `PVP_SESSION_SECRET` 缺失的設定錯誤與使用者密碼不符，避免兩者皆誤報 401。
 - [x] 在最新 Worker 部署後，以使用者目前的網站密碼重新登入，依 HTTP 503／401／200 結果判定 Cloudflare Secret 缺失、密碼不符或登入成功。
