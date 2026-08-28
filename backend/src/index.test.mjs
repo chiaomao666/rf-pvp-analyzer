@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import worker from "./index.mjs";
+import worker, { normalizeCapture } from "./index.mjs";
 
 function env() {
   const state = { credential: null };
@@ -49,6 +49,18 @@ async function login(current, password = "site-password") {
 function changePassword(current, cookie, body) {
   return worker.fetch(request("/api/pvp/password", { method: "POST", headers: { "Content-Type": "application/json", Cookie: cookie }, body: JSON.stringify(body) }), current);
 }
+
+describe("PVP capture identity fields", () => {
+  it("preserves numeric player IDs for both sides and rejects malformed IDs", () => {
+    const valid = normalizeCapture({ workspaceId: "832459", data: { mode: "5v5", outcome: "win", playerId: 832459, playerUnion: "我方聯盟", opponentPlayerId: "918273", opponentUnion: "對手聯盟", playerTeam: Array.from({ length: 5 }, (_, index) => ({ name: `我方-${index}` })), opponentTeam: Array.from({ length: 5 }, (_, index) => ({ name: `對手-${index}` })) } });
+    expect(valid.ok).toBe(true);
+    expect(valid.data).toMatchObject({ workspaceId: "832459", playerId: "832459", opponentPlayerId: "918273" });
+    const malformed = normalizeCapture({ workspaceId: "832459", data: { mode: "1v1", outcome: "win", playerId: "not-an-id", opponentPlayerId: "-1", playerTeam: [{ name: "我方" }], opponentTeam: [{ name: "對手" }] } });
+    expect(malformed.ok).toBe(true);
+    expect(malformed.data).not.toHaveProperty("playerId");
+    expect(malformed.data).not.toHaveProperty("opponentPlayerId");
+  });
+});
 
 describe("PVP Worker security boundary", () => {
   it("fails closed without a site session or write secret", async () => {

@@ -159,11 +159,13 @@ describe("同步身份欄位", () => {
       outcome: "win",
       playerName: "我方玩家",
       playerUnion: "我方聯盟",
+      playerId: "832459",
       opponentName: "對手玩家",
       opponentUnion: "對手聯盟",
+      opponentPlayerId: 918273,
       playerTeam: team("我方"),
       opponentTeam: team("對手"),
     }));
-    expect(parsed.records[0]).toMatchObject({ playerName: "我方玩家", playerUnion: "我方聯盟", opponentName: "對手玩家", opponentUnion: "對手聯盟" });
+    expect(parsed.records[0]).toMatchObject({ playerName: "我方玩家", playerUnion: "我方聯盟", playerId: "832459", opponentName: "對手玩家", opponentUnion: "對手聯盟", opponentPlayerId: "918273" });
   });
 });

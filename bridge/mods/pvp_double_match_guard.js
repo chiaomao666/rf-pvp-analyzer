@@ -48,7 +48,7 @@
   const BRIDGE_ENDPOINT = STARTUP_BRIDGE_CONFIG.endpoint || DEFAULT_BRIDGE_ENDPOINT;
   const CONFIGURED_WRITE_SECRET = STARTUP_BRIDGE_CONFIG.writeSecret;
   const BRIDGE_ALLOWED_KEYS = [
-    "battleAt", "mode", "outcome", "playerTeam", "opponentTeam", "playerName", "playerUnion", "opponentName", "opponentUnion",
+    "battleAt", "mode", "outcome", "playerTeam", "opponentTeam", "playerName", "playerUnion", "playerId", "opponentName", "opponentUnion", "opponentPlayerId",
     "rankBefore", "rankAfter", "scoreBefore", "scoreAfter", "notes",
     "sourceBattleChannel", "sourceBattleId",
   ];
@@ -865,7 +865,9 @@
         playerTeam,
         opponentTeam,
         ...(typeof player?.name === "string" && player.name.trim() ? { playerName: player.name.trim() } : {}),
+        ...(player?.user_id !== undefined && player?.user_id !== null ? { playerId: String(player.user_id).trim() } : {}),
         ...(typeof opponent?.name === "string" && opponent.name.trim() ? { opponentName: opponent.name.trim() } : {}),
+        ...(opponent?.user_id !== undefined && opponent?.user_id !== null ? { opponentPlayerId: String(opponent.user_id).trim() } : {}),
         ...(battleIdentity.playerName ? { playerName: battleIdentity.playerName } : {}),
         ...(battleIdentity.playerUnion ? { playerUnion: battleIdentity.playerUnion } : {}),
         ...(battleIdentity.opponentName ? { opponentName: battleIdentity.opponentName } : {}),
@@ -935,8 +937,10 @@
       workspaceId: String(record.sourcePlayerUserId || "").slice(0, 80),
       ...(typeof record.playerName === "string" ? { playerName: record.playerName.slice(0, 120) } : {}),
       ...(typeof record.playerUnion === "string" ? { playerUnion: record.playerUnion.slice(0, 120) } : {}),
+      ...(typeof record.playerId === "string" && /^\d{1,40}$/.test(record.playerId) ? { playerId: record.playerId } : {}),
       ...(typeof record.opponentName === "string" ? { opponentName: record.opponentName.slice(0, 120) } : {}),
       ...(typeof record.opponentUnion === "string" ? { opponentUnion: record.opponentUnion.slice(0, 120) } : {}),
+      ...(typeof record.opponentPlayerId === "string" && /^\d{1,40}$/.test(record.opponentPlayerId) ? { opponentPlayerId: record.opponentPlayerId } : {}),
       ...(Number.isInteger(record.rankBefore) && record.rankBefore >= 0 ? { rankBefore: record.rankBefore } : {}),
       ...(Number.isInteger(record.rankAfter) && record.rankAfter >= 0 ? { rankAfter: record.rankAfter } : {}),
       ...(Number.isInteger(record.scoreBefore) && record.scoreBefore >= 0 ? { scoreBefore: record.scoreBefore } : {}),
@@ -953,7 +957,7 @@
       if (record.resultEvidence !== "official_player_medals") continue;
       const key = String(record.sourceBattleChannel || record.sourceBattleId || `${record.battleAt}:${record.mode}`);
       const summary = bridgeSummary(record);
-      const identitySignature = [summary.playerName, summary.playerUnion, summary.opponentName, summary.opponentUnion].join("|");
+      const identitySignature = [summary.playerName, summary.playerUnion, summary.playerId, summary.opponentName, summary.opponentUnion, summary.opponentPlayerId].join("|");
       if (bridgeSentKeys.get(key) === identitySignature) continue;
       if (!summary.playerTeam.length || !summary.opponentTeam.length) continue;
       bridgeSentKeys.set(key, identitySignature);

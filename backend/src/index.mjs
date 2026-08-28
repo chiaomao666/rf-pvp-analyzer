@@ -27,8 +27,8 @@ export function normalizeCapture(input) {
   if (mode === "5v5" && (playerTeam.length !== 5 || opponentTeam.length !== 5)) return { ok: false, error: "5v5 必須包含雙方各 5 名成員" };
   const battleAt = Number(data?.battleAt);
   const normalized = { workspaceId, battleAt: Number.isFinite(battleAt) ? Math.trunc(battleAt) : Date.now(), mode, outcome, playerTeam, opponentTeam };
-  for (const key of ["playerName", "playerUnion", "opponentName", "opponentUnion", "sourceBattleChannel", "sourceBattleId"]) {
-    const value = safeText(data?.[key], ["playerName", "playerUnion", "opponentName", "opponentUnion"].includes(key) ? 120 : 500); if (value) normalized[key] = value;
+  for (const key of ["playerName", "playerUnion", "playerId", "opponentName", "opponentUnion", "opponentPlayerId", "sourceBattleChannel", "sourceBattleId"]) {
+    const raw = data?.[key]; const value = (typeof raw === "number" && Number.isFinite(raw) ? String(Math.trunc(raw)) : safeText(raw, ["playerName", "playerUnion", "playerId", "opponentName", "opponentUnion", "opponentPlayerId"].includes(key) ? 120 : 500)); if (value && (!["playerId", "opponentPlayerId"].includes(key) || /^\d{1,40}$/.test(value))) normalized[key] = value;
   }
   for (const key of ["rankBefore", "rankAfter", "scoreBefore", "scoreAfter"]) { const value = Number(data?.[key]); if (Number.isInteger(value) && value >= 0) normalized[key] = value; }
   const sourceKey = normalized.sourceBattleChannel || normalized.sourceBattleId || `${normalized.battleAt}:${normalized.mode}`;
@@ -130,9 +130,9 @@ export default {
         const { data, sourceKey } = normalized; const existing = await env.DB.prepare("SELECT id FROM pvp_events WHERE workspace_id = ? AND source_key = ?").bind(data.workspaceId, sourceKey).first();
         if (existing) {
           const existingRow = await env.DB.prepare("SELECT payload_json FROM pvp_events WHERE id = ?").bind(existing.id).first(); let merged = data;
-          try { const previous = JSON.parse(existingRow?.payload_json || "{}"); merged = { ...previous, ...data }; for (const key of ["playerName", "playerUnion", "opponentName", "opponentUnion"]) if (!data[key] && previous[key]) merged[key] = previous[key]; } catch {}
+          try { const previous = JSON.parse(existingRow?.payload_json || "{}"); merged = { ...previous, ...data }; for (const key of ["playerName", "playerUnion", "playerId", "opponentName", "opponentUnion", "opponentPlayerId"]) if (!data[key] && previous[key]) merged[key] = previous[key]; } catch {}
           let previousPayload = {}; try { previousPayload = JSON.parse(existingRow?.payload_json || "{}"); } catch {}
-          const changedIdentity = ["playerName", "playerUnion", "opponentName", "opponentUnion"].some((key) => data[key] && data[key] !== (previousPayload[key] || ""));
+          const changedIdentity = ["playerName", "playerUnion", "playerId", "opponentName", "opponentUnion", "opponentPlayerId"].some((key) => data[key] && data[key] !== (previousPayload[key] || ""));
           if (changedIdentity) await env.DB.prepare("UPDATE pvp_events SET payload_json = ?, captured_at = ? WHERE id = ?").bind(JSON.stringify(merged), Date.now(), existing.id).run();
           return json({ accepted: true, duplicate: !changedIdentity, updated: changedIdentity, eventId: Number(existing.id) }, 200, headers);
         }

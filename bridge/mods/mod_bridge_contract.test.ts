@@ -79,6 +79,10 @@ describe("approved PVP mod bridge contract", () => {
     expect(guard).toContain("AniDoor_rightTitle2_");
     expect(guard).toContain("playerUnion");
     expect(guard).toContain("opponentUnion");
+    expect(guard).toContain("playerId");
+    expect(guard).toContain("opponentPlayerId");
+    expect(guard).toContain("player?.user_id");
+    expect(guard).toContain("opponent?.user_id");
     expect(guard).toContain("installAniDoorCapture");
     expect(guard).toContain("identitySignature");
     expect(guard).toContain("battleIdentityByChannel");
