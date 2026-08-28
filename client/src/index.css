@@ -121,6 +121,59 @@ h1 { margin-bottom: 9px; font-family: "Barlow Condensed", "Noto Sans TC", sans-s
 
 .account-zone { text-decoration: none; }.account-page { display: grid; gap: 18px; }.account-titlebar { gap: 22px; }.workspace-chip { display: inline-flex; align-items: center; gap: 8px; max-width: min(100%, 360px); padding: 10px 12px; border: 1px solid rgba(117, 231, 255, .38); color: #bdefff; background: rgba(3, 22, 53, .72); font: 10px "Space Mono", monospace; word-break: break-word; }.account-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr); gap: 18px; }.account-login-panel, .workspace-panel, .migration-panel, .account-warning-panel { padding: 24px; }.account-login-panel > header, .workspace-panel > header, .account-warning-panel > header { display: flex; align-items: flex-start; gap: 13px; padding-bottom: 18px; border-bottom: 1px solid rgba(97, 167, 228, .25); }.account-login-panel > header > span, .workspace-panel > header > span, .account-warning-panel > header > span { display: grid; flex: 0 0 auto; place-items: center; width: 30px; height: 30px; color: #061530; background: #75e7ff; }.account-login-panel h2, .workspace-panel h2, .migration-panel h2, .account-warning-panel h2 { margin: 2px 0 5px; font-size: 19px; }.account-login-panel header p:last-child, .workspace-panel header p:last-child { margin: 0; color: #8faecd; font-size: 11px; line-height: 1.6; }.account-form { display: grid; gap: 15px; padding-top: 18px; }.account-form label:not(.risk-check) { display: grid; gap: 7px; color: #a6c9e7; font-size: 10px; font-weight: 700; letter-spacing: .05em; }.account-form input:not([type="checkbox"]) { width: 100%; min-height: 39px; }.risk-check { display: flex; align-items: flex-start; gap: 9px; color: #b6cee5; font-size: 11px; line-height: 1.65; }.risk-check input { width: 15px; height: 15px; margin-top: 2px; accent-color: #75e7ff; }.account-actions { display: flex; gap: 10px; flex-wrap: wrap; }.account-actions button, .migration-panel button { min-height: 39px; }.account-status { display: flex; align-items: flex-start; gap: 9px; padding: 13px 15px; border: 1px solid rgba(117, 231, 255, .38); color: #cbeeff; background: rgba(5, 34, 75, .74); font-size: 12px; line-height: 1.55; }.account-status.success { border-color: rgba(168, 244, 122, .5); color: #d5ffc0; }.account-status.error { border-color: rgba(255, 143, 153, .58); color: #ffd1d6; background: rgba(86, 17, 34, .34); }.account-status.info { color: #c7e7ff; }.current-workspace { display: grid; gap: 7px; padding-top: 18px; }.current-workspace b { color: #84edff; font-size: 14px; }.current-workspace small { color: #9dbdd9; font-size: 10px; }.current-workspace code { display: inline-block; width: fit-content; max-width: 100%; padding: 5px 7px; color: #bdefff; overflow-wrap: anywhere; background: rgba(0, 10, 31, .55); font: 10px "Space Mono", monospace; }.text-action { display: inline-flex; width: fit-content; align-items: center; gap: 6px; margin-top: 5px; padding: 0; color: #ffb6bf; border: 0; background: transparent; font: 11px "Space Mono", monospace; cursor: pointer; }.empty-workspace { display: flex; align-items: flex-start; gap: 11px; padding-top: 18px; color: #a5c1dc; font-size: 12px; line-height: 1.6; }.empty-workspace svg { color: #ffbdc5; flex: 0 0 auto; }.empty-workspace p { margin: 0; }.profile-list { display: grid; gap: 7px; margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(97, 167, 228, .25); }.micro-label { margin: 0 0 3px; color: #7295ba; font: 9px "Space Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }.profile-select { display: grid; gap: 3px; width: 100%; padding: 9px 10px; text-align: left; color: #b9d6ee; border: 1px solid rgba(91, 164, 229, .3); background: rgba(1, 17, 43, .46); cursor: pointer; }.profile-select:hover, .profile-select.selected { border-color: rgba(117, 231, 255, .7); background: rgba(8, 54, 94, .55); }.profile-select span { font-size: 11px; }.profile-select small { color: #79a4c8; font-size: 9px; }.migration-panel { display: flex; align-items: center; justify-content: space-between; gap: 22px; border-color: rgba(255, 205, 117, .52); background: linear-gradient(110deg, rgba(74, 49, 16, .28), rgba(3, 25, 60, .74)); }.migration-panel p { max-width: 780px; margin: 0; color: #c7d9e9; font-size: 12px; line-height: 1.7; }.migration-panel b { color: #ffe29a; }.account-warning-panel { border-color: rgba(255, 143, 153, .42); }.warning-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; padding-top: 19px; }.warning-grid > div + div { padding-left: 24px; border-left: 1px solid rgba(255, 143, 153, .24); }.warning-grid h3 { margin: 0 0 10px; color: #ffd0d4; font-size: 13px; }.warning-grid p { margin: 0 0 10px; color: #b8cde2; font-size: 11px; line-height: 1.72; }.warning-grid p b { color: #ffccd1; }
 @media (max-width: 860px) { .account-grid, .warning-grid { grid-template-columns: 1fr; }.warning-grid > div + div { padding: 18px 0 0; border-top: 1px solid rgba(255, 143, 153, .24); border-left: 0; }.migration-panel { align-items: flex-start; flex-direction: column; }.migration-panel button { width: 100%; } }
+
+/* Compact mobile layout: keep the desktop composition intact while reducing the vertical scale on small screens. */
+@media (max-width: 760px) {
+  .topbar { min-height: 62px; padding: 10px 14px 0; gap: 7px; }
+  .brand-lockup { gap: 8px; }
+  .brand-mark { width: 29px; height: 29px; }
+  .brand-mark svg { width: 16px; height: 16px; }
+  .brand-lockup strong { font-size: 24px; }
+  .brand-lockup em { margin-top: 2px; font-size: 8px; }
+  .topnav { width: calc(100% + 28px); margin-inline: -14px; gap: 0; }
+  .topnav a { height: 34px; gap: 5px; padding-inline: 6px; font-size: 11px; }
+  .topnav a svg { width: 14px; height: 14px; }
+  .workspace { padding: 19px 14px 26px; }
+  .page-titlebar { gap: 15px; padding-bottom: 18px; margin-bottom: 18px; }
+  .eyebrow { margin-bottom: 6px; font-size: 8px; letter-spacing: .12em; }
+  h1 { font-size: 34px; }
+  .page-titlebar > div > p:not(.eyebrow) { font-size: 11px; line-height: 1.55; }
+  .title-actions { gap: 7px; }
+  .blueprint-button { min-height: 34px; padding-inline: 11px !important; font-size: 11px; }
+  .metrics-grid { gap: 8px; margin-bottom: 18px; }
+  .metric-card { min-height: 105px; padding: 13px; }
+  .metric-label { gap: 6px; font-size: 10px; }
+  .metric-dot { width: 5px; height: 5px; }
+  .metric-value { margin: 13px 0 6px; font-size: 36px; }
+  .metric-detail { font-size: 10px; line-height: 1.4; }
+  .chart-card, .recent-card { min-height: 280px; padding: 16px; }
+  .panel-header { margin-bottom: 14px; }
+  .panel-header h2, .raw-panel h2, .notes-panel h2 { font-size: 15px; }
+  .empty-data { padding: 34px 16px; }
+  .empty-data h2 { font-size: 16px; }
+  .empty-data p { margin-bottom: 16px; font-size: 11px; line-height: 1.6; }
+  .form-section, .team-form { padding: 16px; }
+  .form-section > header, .team-form > header, .import-form > header { margin-bottom: 15px; }
+  .detail-header { padding: 16px; }
+  .team-panel { min-height: 190px; padding: 16px; }
+  .notes-panel, .raw-panel { padding: 16px; }
+  .app-footer { gap: 8px; padding: 12px 14px; font-size: 7px; letter-spacing: .05em; }
+}
+
+@media (max-width: 450px) {
+  .topbar { padding-inline: 11px; }
+  .topnav { width: calc(100% + 22px); margin-inline: -11px; }
+  .topnav a { height: 32px; font-size: 10px; }
+  .workspace { padding: 16px 12px 22px; }
+  .page-titlebar { gap: 12px; padding-bottom: 15px; margin-bottom: 15px; }
+  h1 { font-size: 31px; }
+  .page-titlebar > div > p:not(.eyebrow) { font-size: 10px; }
+  .metric-card { min-height: 96px; padding: 11px 12px; }
+  .metric-value { margin: 11px 0 5px; font-size: 33px; }
+  .metric-detail { font-size: 9px; }
+  .chart-card, .recent-card { padding: 13px; }
+  .app-footer { padding-inline: 12px; }
+}
 @media (max-width: 500px) { .account-login-panel, .workspace-panel, .migration-panel, .account-warning-panel { padding: 18px; }.account-actions { display: grid; grid-template-columns: 1fr; }.account-actions button { width: 100%; } }
 
 /* Account workspace: each visible information cell gets a concise HUD frame. */
