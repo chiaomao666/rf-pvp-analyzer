@@ -45,6 +45,7 @@ export default function BuildStatusFooter() {
       <span>最後同步：{formatTime(snapshot.lastSyncAt)}</span>
       <i /><span>版本 {build.version}</span>
       <span>更新：{formatTime(build.timestamp)}</span>
+      <span className="site-owner">網站擁有者&管理者：俏貓</span>
     </footer>
   );
 }

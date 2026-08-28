@@ -1,8 +1,10 @@
 # Project TODO
 
+- [x] 盤點全部 `assets/mods/` mod，先由 `rf_mod_loader.js` 的載入清單反向定位來源，再整理功能、載入順序、相依性、資料邊界與效能注意事項，產出完整架構表。
+
 - [x] 將 PVP 被動 Socket 觀察器從 `rf_mod_loader.js` 拆為獨立 `assets/mods/` mod，載入器只負責順序載入，守衛維持訂閱同一觀察器。
 
-- [ ] 交付獨立 Socket 觀察器、載入器與相容守衛後，待以固定 `assets/mods/` 目錄實機確認 Socket 觀察器、訊框計數與 5v5 擷取恢復。
+- [x] 交付獨立 Socket 觀察器、載入器與相容守衛後，已以固定 `assets/mods/` 目錄實機確認 Socket 觀察器、訊框計數與 5v5 擷取恢復。
 
 - [x] 稽核 mod 設定檔、載入器與 PVP 守衛對 `PVP_WRITE_SECRET` 的讀取、傳輸、快取與診斷輸出，確認未外洩後再提出必要修正。
 
@@ -326,3 +328,7 @@
 - [ ] 測試 GitHub Pages 登入、Worker session 與 mod 戰績寫入流程；不新增假戰績、不更新 Manus 受管網站。
 
 - [ ] 在 GitHub Pages 登入成功／session 建立時加入安全 console.log 診斷訊息，不輸出密碼、cookie、secret 或完整戰績；只推送 GitHub。
+
+- [x] 詳細分析 5 個未被現行 `rf_mod_loader.js` 載入的 legacy 檔案，檢查殘留引用、全域副作用、相依性與是否需要封存或徹底清除。
+
+- [x] 只在 GitHub Pages 專案右下角加入「網站擁有者&管理者：俏貓」，完成響應式版面、測試與建置驗證；不更新 Manus 受管網站。
