@@ -3,6 +3,7 @@ export type MedalsSnapshot = { capturedAt: number; count: number; items: unknown
 
 const SOCKET_ENDPOINT = "wss://api.komisureiya.com/socket/websocket";
 const SOCKET_VSN = "2.0.0";
+const PROFILE_UPDATE_GRACE_MS = 1_500;
 
 type PhoenixFrame = [string | null, string | null, string, string, unknown];
 
@@ -17,6 +18,14 @@ function text(value: unknown): string | undefined {
 function id(value: unknown): string | undefined {
   if (typeof value === "number" && Number.isFinite(value)) return String(Math.trunc(value));
   return text(value);
+}
+
+function hasDisplayIdentity(profile?: OfficialPlayerProfile) {
+  return Boolean(profile?.playerName || profile?.unionName);
+}
+
+function isPlayerTopic(actualTopic: string, userId: string) {
+  return actualTopic === `player:${userId}` || actualTopic === "player:#";
 }
 
 type ObjectRecord = Record<string, unknown>;
@@ -121,10 +130,13 @@ export function requestOfficialMedals(userId: string, userToken: string, timeout
     const medalsRef = "rf-medals-request";
     let complete = false;
     let joinedProfile: OfficialPlayerProfile | undefined;
+    let delayedSnapshot: MedalsSnapshot | undefined;
+    let profileGraceTimer: ReturnType<typeof setTimeout> | undefined;
     const finish = (error?: Error, result?: MedalsSnapshot) => {
       if (complete) return;
       complete = true;
       globalThis.clearTimeout(timer);
+      if (profileGraceTimer) globalThis.clearTimeout(profileGraceTimer);
       try { socket.close(1000, "medals query complete"); } catch { /* Socket may already be closed. */ }
       if (error) reject(error); else if (result) resolve(result);
     };
@@ -134,10 +146,15 @@ export function requestOfficialMedals(userId: string, userToken: string, timeout
     socket.onmessage = event => {
       if (typeof event.data !== "string") return;
       const frame = parsePhoenixFrame(event.data);
-      if (!frame || frame[2] !== topic) return;
+      if (!frame || !isPlayerTopic(frame[2], userId)) return;
       const [, ref, , eventName, payload] = frame;
       if (eventName === "update_data") {
         joinedProfile = mergeOfficialProfiles(joinedProfile, extractOfficialProfileFromPhoenixUpdate(payload, userId), userId);
+        if (delayedSnapshot) {
+          const profile = mergeOfficialProfiles(delayedSnapshot.profile, joinedProfile, userId);
+          delayedSnapshot = profile ? { ...delayedSnapshot, profile } : delayedSnapshot;
+          if (hasDisplayIdentity(profile)) finish(undefined, delayedSnapshot);
+        }
         return;
       }
       if (eventName !== "phx_reply") return;
@@ -152,7 +169,12 @@ export function requestOfficialMedals(userId: string, userToken: string, timeout
         try {
           const snapshot = extractMedalsFromPhoenixReply(payload, Date.now(), userId);
           const profile = mergeOfficialProfiles(joinedProfile, snapshot.profile, userId);
-          finish(undefined, profile ? { ...snapshot, profile } : snapshot);
+          delayedSnapshot = profile ? { ...snapshot, profile } : snapshot;
+          if (hasDisplayIdentity(profile)) {
+            finish(undefined, delayedSnapshot);
+          } else {
+            profileGraceTimer = globalThis.setTimeout(() => finish(undefined, delayedSnapshot), PROFILE_UPDATE_GRACE_MS);
+          }
         }
         catch (error) { finish(error instanceof Error ? error : new Error("medals 回應無法處理。")); }
       }
@@ -180,7 +202,7 @@ export function requestOfficialProfile(userId: string, userToken: string, timeou
     socket.onmessage = event => {
       if (typeof event.data !== "string") return;
       const frame = parsePhoenixFrame(event.data);
-      if (!frame || frame[2] !== topic) return;
+      if (!frame || !isPlayerTopic(frame[2], userId)) return;
       if (frame[3] === "update_data") {
         profile = mergeOfficialProfiles(profile, extractOfficialProfileFromPhoenixUpdate(frame[4], userId), userId);
         if (profile?.playerName || profile?.unionName) finish(undefined, profile);

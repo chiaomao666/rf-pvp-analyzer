@@ -128,10 +128,11 @@ describe("帳號工作區隔離與備份", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("登入成功後只保存官方 user_id profile，不保存本次回應的 user token", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ status: "ok", data: { user_id: "918", user_token: "test-session-token" } }), { status: 200, headers: { "Content-Type": "application/json" } })));
+  it("登入成功後保存玩家名稱、聯盟名稱與官方 user_id，但不保存本次回應的 user token", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ status: "ok", data: { user_id: "918", user_token: "test-session-token" }, user: { id: 918, nickname: "俏貓紅蝶天紋斬", organization: { name: "RF聯盟" } } }), { status: 200, headers: { "Content-Type": "application/json" } })));
     const session = await loginOfficialAccount("tester", "only-for-request");
-    expect(session).toMatchObject({ verifiedThisSession: true, profile: { id: "official:918", externalUserId: "918", kind: "official" } });
+    expect(session).toMatchObject({ verifiedThisSession: true, profile: { id: "official:918", externalUserId: "918", kind: "official", playerName: "俏貓紅蝶天紋斬", unionName: "RF聯盟" } });
+    await expect(listProfiles()).resolves.toMatchObject([{ id: "official:918", externalUserId: "918", playerName: "俏貓紅蝶天紋斬", unionName: "RF聯盟" }]);
     const request = vi.mocked(fetch).mock.calls[0];
     expect(String(request[1]?.body)).toContain("user%5Bpassword%5D=only-for-request");
     const backup = await exportLocalBackup();
@@ -139,6 +140,13 @@ describe("帳號工作區隔離與備份", () => {
     expect(JSON.stringify(backup)).not.toContain("test-session-token");
     logoutWorkspace();
     await expect(activateStoredWorkspace("official:918")).resolves.toMatchObject({ verifiedThisSession: false, profile: { id: "official:918" } });
+  });
+
+  it("重新登入同一帳號時保留既有 medals snapshot", async () => {
+    await upsertProfile({ id: "official:918", externalUserId: "918", kind: "official", createdAt: 1, playerName: "舊名稱", unionName: "舊聯盟", medalsSnapshot: { capturedAt: 2, count: 34, items: [{ medal_id: 1 }] } });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ status: "ok", data: { user_id: "918", user_token: "test-session-token" }, profile: { playerId: "918", playerName: "新名稱", unionName: "新聯盟" } }), { status: 200, headers: { "Content-Type": "application/json" } })));
+    const session = await loginOfficialAccount("tester", "only-for-request");
+    expect(session.profile).toMatchObject({ playerName: "新名稱", unionName: "新聯盟", medalsSnapshot: { count: 34, items: [{ medal_id: 1 }] } });
   });
 
   it("瀏覽器 CORS 型 fetch 拒絕會回報非帳密錯誤，並且不建立工作區", async () => {
@@ -151,6 +159,13 @@ describe("帳號工作區隔離與備份", () => {
 });
 
 describe("工作區玩家身分格式", () => {
+  it("保存 medals 快照時仍保留獨立 profile 身份欄位", async () => {
+    await upsertProfile({ id: "official:832459", externalUserId: "832459", kind: "official", createdAt: 1, playerName: "俏貓紅蝶天紋斬", unionName: "RF聯盟", medalsSnapshot: { capturedAt: 2, count: 34, items: [{ medal_id: 1 }] } });
+    await expect(listProfiles()).resolves.toMatchObject([{ externalUserId: "832459", playerName: "俏貓紅蝶天紋斬", unionName: "RF聯盟", medalsSnapshot: { count: 34, items: [{ medal_id: 1 }] } }]);
+    const stored = (await listProfiles())[0];
+    expect(stored?.medalsSnapshot).not.toHaveProperty("profile");
+  });
+
   it("以玩家名稱、聯盟名稱與玩家 ID 組成工作區標籤", () => {
     expect(formatProfileIdentity({ id: "official:832459", externalUserId: "832459", kind: "official", createdAt: 1, playerName: "俏貓紅蝶天紋斬", unionName: "RF 聯盟" })).toBe("俏貓紅蝶天紋斬 · RF 聯盟 (玩家ID: 832459)");
   });

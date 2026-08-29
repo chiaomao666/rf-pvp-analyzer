@@ -81,7 +81,8 @@ export async function loginOfficialAccount(account: string, password: string) {
   if (!userId) throw new OfficialLoginError("credentials", "遊戲伺服器未確認此帳號。請確認帳號與密碼，或稍後再試。 ");
   const now = Date.now();
   const previous = await getProfile(`official:${userId}`);
-  const loginProfile = extractProfileFromResponse(data, userId);
+  // 官方 login response 的身份欄位可能位於 data、user 或 response 等巢狀節點；不可只讀 data。
+  const loginProfile = extractProfileFromResponse(payload, userId);
   const identityProfile = mergeOfficialProfiles(
     { externalUserId: userId, ...(previous?.playerName ? { playerName: previous.playerName } : {}), ...(previous?.unionName ? { unionName: previous.unionName } : {}) },
     loginProfile,
@@ -93,6 +94,7 @@ export async function loginOfficialAccount(account: string, password: string) {
     kind: "official",
     createdAt: previous?.createdAt ?? now,
     lastVerifiedAt: now,
+    ...(previous?.medalsSnapshot ? { medalsSnapshot: previous.medalsSnapshot } : {}),
     ...(identityProfile?.playerName ? { playerName: identityProfile.playerName } : {}),
     ...(identityProfile?.unionName ? { unionName: identityProfile.unionName } : {}),
   };
@@ -105,11 +107,11 @@ export async function refreshOfficialMedals() {
     throw new Error("請先在本次工作階段完成官方登入，才能取得 medals 資料。重新整理或切換工作區後需要重新登入。");
   }
   const medalsSnapshot = await requestOfficialMedals(session.profile.externalUserId, memoryOnlyUserToken);
-  const officialProfile = medalsSnapshot.profile;
-  const identityProfile = mergeOfficialProfiles(session.profile, officialProfile, session.profile.externalUserId);
+  const { profile: snapshotProfile, ...medalsOnlySnapshot } = medalsSnapshot;
+  const identityProfile = mergeOfficialProfiles(session.profile, snapshotProfile, session.profile.externalUserId);
   const profile: LocalProfile = {
     ...session.profile,
-    medalsSnapshot,
+    medalsSnapshot: medalsOnlySnapshot,
     ...(identityProfile?.externalUserId ? { externalUserId: identityProfile.externalUserId } : {}),
     ...(identityProfile?.playerName ? { playerName: identityProfile.playerName } : {}),
     ...(identityProfile?.unionName ? { unionName: identityProfile.unionName } : {}),

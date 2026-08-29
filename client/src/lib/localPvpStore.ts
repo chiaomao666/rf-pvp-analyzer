@@ -1,5 +1,4 @@
 import type { TeamMember } from "@/components/PvpUi";
-
 export type PvpOutcome = "win" | "loss" | "draw" | "unknown";
 export type PvpMode = "1v1" | "3v3" | "5v5";
 export type LocalProfile = { id: string; externalUserId?: string; kind: "official" | "demo"; createdAt: number; lastVerifiedAt?: number; playerName?: string; unionName?: string; medalsSnapshot?: { capturedAt: number; count: number; items: unknown[] } };

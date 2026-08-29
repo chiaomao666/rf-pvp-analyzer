@@ -347,3 +347,5 @@
 - [x] 修復登入後工作區保存玩家名稱、聯盟名稱與玩家 ID 的流程
 - [x] 修復官方 player channel profile／medals 回覆的欄位解析與合併更新
 - [x] 補上登入後工作區資料更新的回歸測試並驗證 GitHub Pages 建置
+- [x] 確認 MEDALS SNAPSHOT 的保存邊界是否阻止玩家名稱、聯盟名稱與玩家 ID 更新
+- [x] 用實際工作區保存資料與回歸測試驗證 profile 是否獨立於 medals 陣列

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildOfficialMedalsSocketUrl, extractMedalsFromPhoenixReply, extractProfileFromResponse, mergeOfficialProfiles, parsePhoenixFrame, requestOfficialMedals } from "./officialMedalsSocket";
 
 class FakeWebSocket {
@@ -43,6 +43,24 @@ describe("official medals socket", () => {
     const profile = extractProfileFromResponse({ data: { profile: { user_id: 832459, nickname: "俏貓紅蝶天紋斬", organization: { name: "RF聯盟" } } } });
     expect(profile).toEqual({ externalUserId: "832459", playerName: "俏貓紅蝶天紋斬", unionName: "RF聯盟" });
     expect(mergeOfficialProfiles({ externalUserId: "832459" }, profile)).toEqual(profile);
+  });
+
+  it("medals 先到、profile 後到且 topic 被診斷遮罩時仍會合併身份", async () => {
+    FakeWebSocket.instances = [];
+    const originalWebSocket = globalThis.WebSocket;
+    Object.defineProperty(globalThis, "WebSocket", { configurable: true, value: FakeWebSocket });
+    try {
+      const pending = requestOfficialMedals("918", "memory-only-token", 500);
+      const socket = FakeWebSocket.instances[0];
+      socket.open();
+      socket.message(["join", "rf-medals-join", "player:918", "phx_reply", { status: "ok", response: { id: 918 } }]);
+      socket.message(["join", "rf-medals-request", "player:918", "phx_reply", { status: "ok", response: { medals: [{ medal_id: 4 }] } }]);
+      socket.message(["join", null, "player:#", "update_data", { profile: { nickname: "俏貓紅蝶天紋斬", organization: { name: "RF聯盟" } } }]);
+      await expect(pending).resolves.toMatchObject({ profile: { externalUserId: "918", playerName: "俏貓紅蝶天紋斬", unionName: "RF聯盟" } });
+    } finally {
+      vi.useRealTimers();
+      Object.defineProperty(globalThis, "WebSocket", { configurable: true, value: originalWebSocket });
+    }
   });
 
   it("只加入 player channel 並發送 medals，快照不保留同回覆的其他欄位", async () => {
