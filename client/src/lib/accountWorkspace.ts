@@ -1,5 +1,5 @@
 import { getProfile, LocalProfile, setActiveProfileId, upsertProfile } from "./localPvpStore";
-import { requestOfficialMedals } from "./officialMedalsSocket";
+import { extractProfileFromResponse, mergeOfficialProfiles, requestOfficialMedals } from "./officialMedalsSocket";
 
 const LOGIN_ENDPOINT = "https://api.komisureiya.com/api/users/log_in";
 const OFFICIAL_APP_VERSION = "2.28";
@@ -79,7 +79,23 @@ export async function loginOfficialAccount(account: string, password: string) {
   }
   const userId = result?.status === "ok" ? id(data?.user_id) : null;
   if (!userId) throw new OfficialLoginError("credentials", "遊戲伺服器未確認此帳號。請確認帳號與密碼，或稍後再試。 ");
-  const now = Date.now(); const previous = await getProfile(`official:${userId}`); const profile: LocalProfile = { id: `official:${userId}`, externalUserId: userId, kind: "official", createdAt: previous?.createdAt ?? now, lastVerifiedAt: now, ...(identity(data, ["player_name", "playerName", "name", "nickname", "display_name"]) ? { playerName: identity(data, ["player_name", "playerName", "name", "nickname", "display_name"])! } : previous?.playerName ? { playerName: previous.playerName } : {}), ...(identity(data, ["union_name", "unionName", "guild_name", "guildName", "organization_name"]) ? { unionName: identity(data, ["union_name", "unionName", "guild_name", "guildName", "organization_name"])! } : previous?.unionName ? { unionName: previous.unionName } : {}) };
+  const now = Date.now();
+  const previous = await getProfile(`official:${userId}`);
+  const loginProfile = extractProfileFromResponse(data, userId);
+  const identityProfile = mergeOfficialProfiles(
+    { externalUserId: userId, ...(previous?.playerName ? { playerName: previous.playerName } : {}), ...(previous?.unionName ? { unionName: previous.unionName } : {}) },
+    loginProfile,
+    userId,
+  );
+  const profile: LocalProfile = {
+    id: `official:${userId}`,
+    externalUserId: userId,
+    kind: "official",
+    createdAt: previous?.createdAt ?? now,
+    lastVerifiedAt: now,
+    ...(identityProfile?.playerName ? { playerName: identityProfile.playerName } : {}),
+    ...(identityProfile?.unionName ? { unionName: identityProfile.unionName } : {}),
+  };
   await upsertProfile(profile); setActiveProfileId(profile.id); memoryOnlyUserToken = typeof data?.user_token === "string" && data.user_token ? data.user_token : null; session = { profile, verifiedThisSession: true }; notify();
   return session;
 }
@@ -90,12 +106,13 @@ export async function refreshOfficialMedals() {
   }
   const medalsSnapshot = await requestOfficialMedals(session.profile.externalUserId, memoryOnlyUserToken);
   const officialProfile = medalsSnapshot.profile;
+  const identityProfile = mergeOfficialProfiles(session.profile, officialProfile, session.profile.externalUserId);
   const profile: LocalProfile = {
     ...session.profile,
     medalsSnapshot,
-    ...(officialProfile?.externalUserId ? { externalUserId: officialProfile.externalUserId } : {}),
-    ...(officialProfile?.playerName ? { playerName: officialProfile.playerName } : {}),
-    ...(officialProfile?.unionName ? { unionName: officialProfile.unionName } : {}),
+    ...(identityProfile?.externalUserId ? { externalUserId: identityProfile.externalUserId } : {}),
+    ...(identityProfile?.playerName ? { playerName: identityProfile.playerName } : {}),
+    ...(identityProfile?.unionName ? { unionName: identityProfile.unionName } : {}),
   };
   await upsertProfile(profile);
   session = { profile, verifiedThisSession: true };

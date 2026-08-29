@@ -19,18 +19,54 @@ function id(value: unknown): string | undefined {
   return text(value);
 }
 
-function extractProfileFromResponse(value: unknown, fallbackUserId?: string): OfficialPlayerProfile | undefined {
-  const response = asObject(value);
-  const nested = asObject(response?.profile) ?? asObject(response?.user) ?? response;
-  if (!nested) return fallbackUserId ? { externalUserId: fallbackUserId } : undefined;
-  const unionValue = nested.union ?? nested.union_name ?? nested.unionName ?? nested.organization ?? nested.organization_name ?? nested.organizationName ?? nested.guild ?? nested.guild_name;
+type ObjectRecord = Record<string, unknown>;
+
+function profileCandidates(value: unknown, depth = 0): ObjectRecord[] {
+  const object = asObject(value);
+  if (!object || depth > 4) return [];
+  const result = [object];
+  for (const key of ["profile", "player", "user", "data", "response", "payload"]) {
+    const nested = object[key];
+    if (nested && typeof nested === "object" && !Array.isArray(nested)) result.push(...profileCandidates(nested, depth + 1));
+  }
+  return result;
+}
+
+function firstProfileValue(candidates: ObjectRecord[], keys: string[]): unknown {
+  for (const candidate of candidates) {
+    for (const key of keys) {
+      if (candidate[key] !== undefined && candidate[key] !== null) return candidate[key];
+    }
+  }
+  return undefined;
+}
+
+export function mergeOfficialProfiles(base?: OfficialPlayerProfile, next?: OfficialPlayerProfile, fallbackUserId?: string): OfficialPlayerProfile | undefined {
+  const merged: OfficialPlayerProfile = {
+    ...(base ?? {}),
+    ...(next?.externalUserId ? { externalUserId: next.externalUserId } : {}),
+    ...(next?.playerName ? { playerName: next.playerName } : {}),
+    ...(next?.unionName ? { unionName: next.unionName } : {}),
+  };
+  if (!merged.externalUserId && fallbackUserId) merged.externalUserId = fallbackUserId;
+  return merged.externalUserId || merged.playerName || merged.unionName ? merged : undefined;
+}
+
+export function extractProfileFromResponse(value: unknown, fallbackUserId?: string): OfficialPlayerProfile | undefined {
+  const candidates = profileCandidates(value);
+  if (!candidates.length) return fallbackUserId ? { externalUserId: fallbackUserId } : undefined;
+  const unionValue = firstProfileValue(candidates, ["union", "union_name", "unionName", "organization", "organization_name", "organizationName", "guild", "guild_name", "guildName"]);
   const unionObject = asObject(unionValue);
   const profile: OfficialPlayerProfile = {
-    externalUserId: id(nested.id ?? nested.user_id ?? nested.userId) ?? fallbackUserId,
-    playerName: text(nested.nickname ?? nested.player_name ?? nested.playerName ?? nested.display_name ?? nested.name),
-    unionName: text(unionObject?.name ?? unionObject?.title) ?? text(unionValue),
+    externalUserId: id(firstProfileValue(candidates, ["player_id", "playerId", "user_id", "userId", "id"])) ?? fallbackUserId,
+    playerName: text(firstProfileValue(candidates, ["nickname", "player_name", "playerName", "display_name", "displayName", "name"])),
+    unionName: text(unionObject?.name ?? unionObject?.title ?? unionObject?.organization_name ?? unionObject?.union_name) ?? text(unionValue),
   };
   return profile.externalUserId || profile.playerName || profile.unionName ? profile : undefined;
+}
+
+export function extractOfficialProfileFromPhoenixUpdate(payload: unknown, fallbackUserId?: string): OfficialPlayerProfile | undefined {
+  return extractProfileFromResponse(payload, fallbackUserId);
 }
 
 function copyMedals(value: unknown): unknown[] {
@@ -64,7 +100,7 @@ export function extractMedalsFromPhoenixReply(payload: unknown, capturedAt = Dat
   const reply = asObject(payload);
   if (reply?.status !== "ok") throw new Error("player channel 未接受 medals 查詢。 ");
   const response = asObject(reply.response);
-  const items = copyMedals(response?.medals);
+  const items = copyMedals(response?.medals ?? asObject(response?.data)?.medals);
   const profile = extractProfileFromResponse(response, fallbackUserId);
   return profile ? { capturedAt, count: items.length, items, profile } : { capturedAt, count: items.length, items };
 }
@@ -98,27 +134,24 @@ export function requestOfficialMedals(userId: string, userToken: string, timeout
     socket.onmessage = event => {
       if (typeof event.data !== "string") return;
       const frame = parsePhoenixFrame(event.data);
-      if (!frame || frame[2] !== topic || frame[3] !== "phx_reply") return;
-      const [, ref, , , payload] = frame;
+      if (!frame || frame[2] !== topic) return;
+      const [, ref, , eventName, payload] = frame;
+      if (eventName === "update_data") {
+        joinedProfile = mergeOfficialProfiles(joinedProfile, extractOfficialProfileFromPhoenixUpdate(payload, userId), userId);
+        return;
+      }
+      if (eventName !== "phx_reply") return;
       if (ref === joinRef) {
         const joined = asObject(payload);
         if (joined?.status !== "ok") { finish(new Error("player channel 未接受本次登入狀態。")); return; }
-        joinedProfile = extractProfileFromResponse(joined.response, userId);
+        joinedProfile = mergeOfficialProfiles(joinedProfile, extractProfileFromResponse(joined.response, userId), userId);
         socket.send(JSON.stringify([joinRef, medalsRef, topic, "medals", {}]));
         return;
       }
       if (ref === medalsRef) {
         try {
           const snapshot = extractMedalsFromPhoenixReply(payload, Date.now(), userId);
-          const profile = snapshot.profile || joinedProfile
-            ? {
-                ...joinedProfile,
-                ...(snapshot.profile?.externalUserId ? { externalUserId: snapshot.profile.externalUserId } : {}),
-                ...(snapshot.profile?.playerName ? { playerName: snapshot.profile.playerName } : {}),
-                ...(snapshot.profile?.unionName ? { unionName: snapshot.profile.unionName } : {}),
-                externalUserId: snapshot.profile?.externalUserId ?? joinedProfile?.externalUserId ?? userId,
-              }
-            : undefined;
+          const profile = mergeOfficialProfiles(joinedProfile, snapshot.profile, userId);
           finish(undefined, profile ? { ...snapshot, profile } : snapshot);
         }
         catch (error) { finish(error instanceof Error ? error : new Error("medals 回應無法處理。")); }
@@ -133,6 +166,7 @@ export function requestOfficialProfile(userId: string, userToken: string, timeou
     const topic = `player:${userId}`;
     const joinRef = "rf-profile-join";
     let complete = false;
+    let profile: OfficialPlayerProfile | undefined;
     const finish = (error?: Error, result?: OfficialPlayerProfile) => {
       if (complete) return;
       complete = true;
@@ -146,7 +180,13 @@ export function requestOfficialProfile(userId: string, userToken: string, timeou
     socket.onmessage = event => {
       if (typeof event.data !== "string") return;
       const frame = parsePhoenixFrame(event.data);
-      if (!frame || frame[2] !== topic || frame[3] !== "phx_reply" || frame[1] !== joinRef) return;
+      if (!frame || frame[2] !== topic) return;
+      if (frame[3] === "update_data") {
+        profile = mergeOfficialProfiles(profile, extractOfficialProfileFromPhoenixUpdate(frame[4], userId), userId);
+        if (profile?.playerName || profile?.unionName) finish(undefined, profile);
+        return;
+      }
+      if (frame[3] !== "phx_reply" || frame[1] !== joinRef) return;
       try { finish(undefined, extractOfficialProfileFromPhoenixReply(frame[4], userId)); }
       catch (error) { finish(error instanceof Error ? error : new Error("玩家資料回應無法處理。")); }
     };

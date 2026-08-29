@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildOfficialMedalsSocketUrl, extractMedalsFromPhoenixReply, parsePhoenixFrame, requestOfficialMedals } from "./officialMedalsSocket";
+import { buildOfficialMedalsSocketUrl, extractMedalsFromPhoenixReply, extractProfileFromResponse, mergeOfficialProfiles, parsePhoenixFrame, requestOfficialMedals } from "./officialMedalsSocket";
 
 class FakeWebSocket {
   static instances: FakeWebSocket[] = [];
@@ -39,6 +39,12 @@ describe("official medals socket", () => {
     expect(parsePhoenixFrame("not-json")).toBeNull();
   });
 
+  it("能從巢狀 profile 與 organization 解析玩家名稱、聯盟與 ID", () => {
+    const profile = extractProfileFromResponse({ data: { profile: { user_id: 832459, nickname: "俏貓紅蝶天紋斬", organization: { name: "RF聯盟" } } } });
+    expect(profile).toEqual({ externalUserId: "832459", playerName: "俏貓紅蝶天紋斬", unionName: "RF聯盟" });
+    expect(mergeOfficialProfiles({ externalUserId: "832459" }, profile)).toEqual(profile);
+  });
+
   it("只加入 player channel 並發送 medals，快照不保留同回覆的其他欄位", async () => {
     FakeWebSocket.instances = [];
     const originalWebSocket = globalThis.WebSocket;
@@ -48,7 +54,8 @@ describe("official medals socket", () => {
       const socket = FakeWebSocket.instances[0];
       socket.open();
       expect(socket.sent.map(entry => JSON.parse(entry)[3])).toEqual(["phx_join"]);
-      socket.message(["rf-medals-join", "rf-medals-join", "player:918", "phx_reply", { status: "ok", response: { id: 918, nickname: "俏貓紅蝶天紋斬", organization: { name: "RF聯盟" }, rank: 1 } }]);
+      socket.message(["rf-medals-join", "rf-medals-join", "player:918", "phx_reply", { status: "ok", response: { id: 918 } }]);
+      socket.message(["rf-medals-join", null, "player:918", "update_data", { profile: { nickname: "俏貓紅蝶天紋斬", organization: { name: "RF聯盟" } } }]);
       expect(socket.sent.map(entry => JSON.parse(entry)[3])).toEqual(["phx_join", "medals"]);
       socket.message(["rf-medals-join", "rf-medals-request", "player:918", "phx_reply", { status: "ok", response: { medals: [{ medal_id: 4 }], score: 6520, rank: 789, Union: { id: 12 } } }]);
       await expect(pending).resolves.toMatchObject({ count: 1, items: [{ medal_id: 4 }], profile: { externalUserId: "918", playerName: "俏貓紅蝶天紋斬", unionName: "RF聯盟" } });
