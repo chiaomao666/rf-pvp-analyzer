@@ -349,3 +349,6 @@
 - [x] 補上登入後工作區資料更新的回歸測試並驗證 GitHub Pages 建置
 - [x] 確認 MEDALS SNAPSHOT 的保存邊界是否阻止玩家名稱、聯盟名稱與玩家 ID 更新
 - [x] 用實際工作區保存資料與回歸測試驗證 profile 是否獨立於 medals 陣列
+- [x] 查明 GitHub Pages 實際 bundle 與工作區讀取後仍缺少玩家名稱、聯盟名稱與 ID 的原因
+- [x] 核對官方 login／player channel 的真實身份欄位與事件順序，避免只依猜測擴充 parser
+- [x] 修復並測試仍未顯示身份資料的實際缺口

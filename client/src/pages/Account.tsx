@@ -94,7 +94,7 @@ export default function Account() {
       try {
         const refreshed = await refreshOfficialMedals();
         setSession(refreshed); await refresh();
-        setStatus({ tone: "success", text: `已確認帳號存在並切換至 ${profileLabel(refreshed.profile)}；本次僅讀取並保存 ${refreshed.profile.medalsSnapshot?.count ?? 0} 枚 medals。密碼與登入 token 未寫入本機儲存。` });
+        setStatus({ tone: "success", text: `已確認帳號並更新玩家資料：${profileLabel(refreshed.profile)}；本次保存 ${refreshed.profile.medalsSnapshot?.count ?? 0} 枚 medals。密碼與登入 token 未寫入本機儲存。` });
       } catch (medalsError) {
         setStatus({ tone: "info", text: `已確認帳號存在並切換至 ${profileLabel(active.profile)}，但 medals 尚未取得：${medalsError instanceof Error ? medalsError.message : "連線未完成。"} 密碼與登入 token 未寫入本機儲存。` });
       }
@@ -110,8 +110,8 @@ export default function Account() {
     try {
       const refreshed = await refreshOfficialMedals();
       setSession(refreshed); await refresh();
-      setStatus({ tone: "success", text: `已更新此帳號的 medals 快照：${refreshed.profile.medalsSnapshot?.count ?? 0} 枚。查詢過程只送出 player channel 加入與 medals 事件。` });
-    } catch (error) { setStatus({ tone: "error", text: error instanceof Error ? error.message : "無法取得 medals 資料。" }); }
+      setStatus({ tone: "success", text: `已更新此帳號的玩家資料與 medals 快照：${profileLabel(refreshed.profile)}；${refreshed.profile.medalsSnapshot?.count ?? 0} 枚。` });
+    } catch (error) { setStatus({ tone: "error", text: error instanceof Error ? error.message : "無法更新玩家資料與 medals。" }); }
     finally { setBusy(false); }
   };
 
@@ -163,7 +163,7 @@ export default function Account() {
   const renderProfiles = (title: string, items: LocalProfile[], open: boolean, setOpen: (value: boolean) => void) => items.length ? <div className="profile-group"><button type="button" className="profile-group-toggle" onClick={() => setOpen(!open)}><span>{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}{title}</span><small>{items.length}</small></button>{open && items.map(profile => <button className={session?.profile.id === profile.id ? "profile-select selected" : "profile-select"} key={profile.id} onClick={() => void onActivate(profile.id)} disabled={busy}><span>{profileLabel(profile)}</span><small>{profile.lastVerifiedAt ? "曾經登入確認" : "本機示範"}</small></button>)}</div> : null;
   return <div className="account-page">
     <section className="page-titlebar account-titlebar">
-      <div><p className="eyebrow">OFFICIAL ACCOUNT CHECK / MEDALS ONLY</p><h1>帳號工作區</h1><p>以官方回傳的帳號 ID 分隔本機戰績。登入後可從 player channel 唯讀取得 `medals`；排名戰歷史會由 PVP 守衛自動同步，也可手動建立資料。</p></div>
+      <div><p className="eyebrow">OFFICIAL ACCOUNT CHECK / PROFILE + MEDALS</p><h1>帳號工作區</h1><p>以官方回傳的帳號 ID 分隔本機戰績。登入後會從 player channel 唯讀查詢玩家 profile 與 `medals`；medals 快照只保存 medals，玩家名稱、聯盟名稱與 ID 會另外保存於工作區。</p></div>
       <div className="workspace-chip"><Database size={15} /><span>{session ? profileLabel(session.profile) : "尚未選取工作區"}</span></div>
     </section>
 
@@ -171,7 +171,7 @@ export default function Account() {
 
     <div className="account-grid">
       <section className="panel account-login-panel">
-        <header><span><KeyRound size={17} /></span><div><p className="eyebrow">OFFICIAL ACCOUNT CHECK</p><h2>登入並確認帳號</h2><p>登入成功後只保留官方 `user_id` 作為此瀏覽器的工作區鍵。</p></div></header>
+        <header><span><KeyRound size={17} /></span><div><p className="eyebrow">OFFICIAL ACCOUNT CHECK</p><h2>登入並確認帳號</h2><p>登入成功後保留官方 `user_id` 作為此瀏覽器的工作區鍵，並嘗試更新玩家名稱、聯盟名稱與玩家 ID。</p></div></header>
         <form className="account-form" onSubmit={onLogin}>
           <label><span>遊戲帳號</span><input autoComplete="username" value={account} onChange={event => setAccount(event.target.value)} placeholder="遊戲帳號或登入 Email" disabled={busy} /></label>
           <label><span>密碼</span><span className="password-field"><input type={showPassword ? "text" : "password"} autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} placeholder="僅用於本次登入請求" disabled={busy} /><button type="button" className="password-toggle" onClick={() => setShowPassword(value => !value)} disabled={busy} aria-label={showPassword ? "隱藏密碼" : "顯示密碼"} aria-pressed={showPassword}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}<span>{showPassword ? "隱藏" : "顯示"}</span></button></span></label>
@@ -182,7 +182,7 @@ export default function Account() {
 
       <aside className="panel workspace-panel">
         <header><span><Database size={17} /></span><div><p className="eyebrow">CURRENT LOCAL SCOPE</p><h2>目前工作區</h2><p>工作區資料只保存在目前瀏覽器，與其他裝置或網站 origin 不共用。</p></div></header>
-        {session ? <div className="current-workspace"><b>{profileLabel(session.profile)}</b><small>{session.verifiedThisSession ? "本次已由官方登入流程確認" : "已選取的本機工作區；未於本次重新驗證"}</small><code>{session.profile.id}</code>{session.profile.medalsSnapshot && <div className="medals-snapshot"><b>MEDALS SNAPSHOT</b><span>{session.profile.medalsSnapshot.count} 枚 medals · {new Date(session.profile.medalsSnapshot.capturedAt).toLocaleString()}</span><small>本機只保留 player channel 回應中的 `medals` 陣列；不保留排名、積分或其他回應欄位。</small></div>}{session.verifiedThisSession && session.profile.kind === "official" && <button className="secondary-action medals-refresh" type="button" disabled={busy} onClick={() => void onRefreshMedals()}><RefreshCw size={14} />重新取得 medals</button>}<button className="text-action" type="button" disabled={busy} onClick={() => { logoutWorkspace(); setStatus({ tone: "info", text: "已登出本次登入狀態；本機工作區資料未刪除。" }); }}><LogOut size={14} />登出並取消選取</button></div> : <div className="empty-workspace"><ShieldAlert size={20} /><p>請登入、選取已存工作區，或開啟示範模式後再建立戰績。</p></div>}
+        {session ? <div className="current-workspace"><b>{profileLabel(session.profile)}</b><small>{session.verifiedThisSession ? "本次已由官方登入流程確認" : "已選取的本機工作區；未於本次重新驗證"}</small><code>{session.profile.id}</code>{session.profile.medalsSnapshot && <div className="medals-snapshot"><b>MEDALS SNAPSHOT</b><span>{session.profile.medalsSnapshot.count} 枚 medals · {new Date(session.profile.medalsSnapshot.capturedAt).toLocaleString()}</span><small>medals 快照只保留 player channel 回應中的 `medals` 陣列；玩家名稱、聯盟名稱與玩家 ID 會另外保存於此工作區的 profile，不會因快照精簡而遺失。</small></div>}{session.verifiedThisSession && session.profile.kind === "official" && <button className="secondary-action medals-refresh" type="button" disabled={busy} onClick={() => void onRefreshMedals()}><RefreshCw size={14} />重新取得 medals</button>}<button className="text-action" type="button" disabled={busy} onClick={() => { logoutWorkspace(); setStatus({ tone: "info", text: "已登出本次登入狀態；本機工作區資料未刪除。" }); }}><LogOut size={14} />登出並取消選取</button></div> : <div className="empty-workspace"><ShieldAlert size={20} /><p>請登入、選取已存工作區，或開啟示範模式後再建立戰績。</p></div>}
         {profiles.length > 0 && <div className="profile-list"><div className="profile-list-head"><p className="micro-label">此瀏覽器已知工作區 · {filteredProfiles.length}/{profiles.length}</p><button type="button" className="text-action" onClick={() => setShowWorkspaceList(value => !value)}>{showWorkspaceList ? "收合" : "展開"}</button></div>{showWorkspaceList && <><label className="workspace-search"><Search size={14} /><input value={profileQuery} onChange={event => setProfileQuery(event.target.value)} placeholder="搜尋玩家名稱、聯盟或玩家 ID" aria-label="搜尋工作區" /></label>{renderProfiles("OFFICIAL ACCOUNTS", officialProfiles, showOfficial, setShowOfficial)}{renderProfiles("DEMO WORKSPACES", demoProfiles, showDemo, setShowDemo)}</>}</div>}
       </aside>
     </div>
@@ -191,6 +191,6 @@ export default function Account() {
 
     {session && (unscoped.matches || unscoped.imports) > 0 && <section className="panel migration-panel"><div><p className="eyebrow">ONE-TIME LEGACY MIGRATION</p><h2>發現未綁定的既有資料</h2><p>本機仍有 <b>{unscoped.matches}</b> 筆戰績及 <b>{unscoped.imports}</b> 筆匯入歷程尚未屬於任何帳號。為避免誤綁，不會自動轉移。確認後會全部指派到目前的 <b>{profileLabel(session.profile)}</b>；此動作不會刪除資料。</p></div><button className="primary-action" type="button" onClick={() => void onMigrate()} disabled={busy}>確認轉移既有資料</button></section>}
 
-    <section className="panel account-warning-panel"><header><span><ShieldAlert size={17} /></span><div><p className="eyebrow">READ BEFORE LOGIN</p><h2>重要安全與技術說明</h2></div></header><div className="warning-grid"><div><h3>帳號安全與隱私</h3><p><b>帳號安全風險：</b>在第三方網站輸入密碼可能導致帳號被盜。</p><p><b>隱私風險：</b>您的遊戲資料將在瀏覽器中處理。</p><p><b>ToS 風險：</b>使用非官方工具可能違反遊戲服務條款。</p><p>本網站不會儲存您的密碼，也不會將登入 token 寫入 IndexedDB、localStorage、備份檔或 GitHub；但仍請自行評估風險。</p></div><div><h3>瀏覽器 CORS 限制</h3><p>瀏覽器安全限制、Cloudflare 或網路環境可能使直接連線遊戲伺服器失敗。連線失敗不必然表示帳號或密碼錯誤。</p><p>若失敗，您可以使用「示範模式」檢視功能；或在自行理解風險下，透過瀏覽器開發者工具或官方允許的本地代理測試連線。</p><p>登入後的唯讀查詢只會加入 player channel 並呼叫 `medals`，本機也只保存回應中的 `medals` 陣列，不保存排名、積分或其他 player 回應欄位。</p></div></div></section>
+    <section className="panel account-warning-panel"><header><span><ShieldAlert size={17} /></span><div><p className="eyebrow">READ BEFORE LOGIN</p><h2>重要安全與技術說明</h2></div></header><div className="warning-grid"><div><h3>帳號安全與隱私</h3><p><b>帳號安全風險：</b>在第三方網站輸入密碼可能導致帳號被盜。</p><p><b>隱私風險：</b>您的遊戲資料將在瀏覽器中處理。</p><p><b>ToS 風險：</b>使用非官方工具可能違反遊戲服務條款。</p><p>本網站不會儲存您的密碼，也不會將登入 token 寫入 IndexedDB、localStorage、備份檔或 GitHub；但仍請自行評估風險。</p></div><div><h3>瀏覽器 CORS 限制</h3><p>瀏覽器安全限制、Cloudflare 或網路環境可能使直接連線遊戲伺服器失敗。連線失敗不必然表示帳號或密碼錯誤。</p><p>若失敗，您可以使用「示範模式」檢視功能；或在自行理解風險下，透過瀏覽器開發者工具或官方允許的本地代理測試連線。</p><p>登入後的唯讀查詢只會加入 player channel 並呼叫 `medals`。medals 快照本身只保存回應中的 `medals` 陣列；玩家名稱、聯盟名稱與玩家 ID 會獨立保存於目前工作區 profile，不保存排名、積分或其他 player 回應欄位。</p></div></div></section>
   </div>;
 }

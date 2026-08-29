@@ -1,5 +1,5 @@
 import { getProfile, LocalProfile, setActiveProfileId, upsertProfile } from "./localPvpStore";
-import { extractProfileFromResponse, mergeOfficialProfiles, requestOfficialMedals } from "./officialMedalsSocket";
+import { extractProfileFromResponse, mergeOfficialProfiles, requestOfficialMedals, requestOfficialProfile } from "./officialMedalsSocket";
 
 const LOGIN_ENDPOINT = "https://api.komisureiya.com/api/users/log_in";
 const OFFICIAL_APP_VERSION = "2.28";
@@ -83,11 +83,19 @@ export async function loginOfficialAccount(account: string, password: string) {
   const previous = await getProfile(`official:${userId}`);
   // 官方 login response 的身份欄位可能位於 data、user 或 response 等巢狀節點；不可只讀 data。
   const loginProfile = extractProfileFromResponse(payload, userId);
+  const loginUserToken = typeof data?.user_token === "string" && data.user_token ? data.user_token : null;
+  // login response 通常只確認 user_id；立即使用同一個短期 token 主動查詢 player profile。
+  // profile 查詢失敗不能否定已成功的登入，之後 refreshOfficialMedals 仍會再次嘗試。
+  let queriedProfile: ReturnType<typeof extractProfileFromResponse>;
+  if (loginUserToken) {
+    try { queriedProfile = await requestOfficialProfile(userId, loginUserToken, 8_000); } catch { queriedProfile = undefined; }
+  }
   const identityProfile = mergeOfficialProfiles(
     { externalUserId: userId, ...(previous?.playerName ? { playerName: previous.playerName } : {}), ...(previous?.unionName ? { unionName: previous.unionName } : {}) },
     loginProfile,
     userId,
   );
+  const mergedIdentityProfile = mergeOfficialProfiles(identityProfile, queriedProfile, userId);
   const profile: LocalProfile = {
     id: `official:${userId}`,
     externalUserId: userId,
@@ -95,10 +103,10 @@ export async function loginOfficialAccount(account: string, password: string) {
     createdAt: previous?.createdAt ?? now,
     lastVerifiedAt: now,
     ...(previous?.medalsSnapshot ? { medalsSnapshot: previous.medalsSnapshot } : {}),
-    ...(identityProfile?.playerName ? { playerName: identityProfile.playerName } : {}),
-    ...(identityProfile?.unionName ? { unionName: identityProfile.unionName } : {}),
+    ...(mergedIdentityProfile?.playerName ? { playerName: mergedIdentityProfile.playerName } : {}),
+    ...(mergedIdentityProfile?.unionName ? { unionName: mergedIdentityProfile.unionName } : {}),
   };
-  await upsertProfile(profile); setActiveProfileId(profile.id); memoryOnlyUserToken = typeof data?.user_token === "string" && data.user_token ? data.user_token : null; session = { profile, verifiedThisSession: true }; notify();
+  await upsertProfile(profile); setActiveProfileId(profile.id); memoryOnlyUserToken = loginUserToken; session = { profile, verifiedThisSession: true }; notify();
   return session;
 }
 

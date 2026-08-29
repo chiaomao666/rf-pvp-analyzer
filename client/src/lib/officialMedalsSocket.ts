@@ -3,7 +3,7 @@ export type MedalsSnapshot = { capturedAt: number; count: number; items: unknown
 
 const SOCKET_ENDPOINT = "wss://api.komisureiya.com/socket/websocket";
 const SOCKET_VSN = "2.0.0";
-const PROFILE_UPDATE_GRACE_MS = 1_500;
+const PROFILE_UPDATE_GRACE_MS = 3_000;
 
 type PhoenixFrame = [string | null, string | null, string, string, unknown];
 
@@ -34,7 +34,7 @@ function profileCandidates(value: unknown, depth = 0): ObjectRecord[] {
   const object = asObject(value);
   if (!object || depth > 4) return [];
   const result = [object];
-  for (const key of ["profile", "player", "user", "data", "response", "payload"]) {
+  for (const key of ["profile", "player", "_player2", "_player", "user", "userProfile", "playerInfo", "player_data", "playerData", "preloads", "account", "data", "response", "payload"]) {
     const nested = object[key];
     if (nested && typeof nested === "object" && !Array.isArray(nested)) result.push(...profileCandidates(nested, depth + 1));
   }
@@ -128,6 +128,7 @@ export function requestOfficialMedals(userId: string, userToken: string, timeout
     const topic = `player:${userId}`;
     const joinRef = "rf-medals-join";
     const medalsRef = "rf-medals-request";
+    const profileRef = "rf-profile-request";
     let complete = false;
     let joinedProfile: OfficialPlayerProfile | undefined;
     let delayedSnapshot: MedalsSnapshot | undefined;
@@ -162,7 +163,19 @@ export function requestOfficialMedals(userId: string, userToken: string, timeout
         const joined = asObject(payload);
         if (joined?.status !== "ok") { finish(new Error("player channel 未接受本次登入狀態。")); return; }
         joinedProfile = mergeOfficialProfiles(joinedProfile, extractProfileFromResponse(joined.response, userId), userId);
+        socket.send(JSON.stringify([joinRef, profileRef, topic, "profile", { user_id: userId }]));
         socket.send(JSON.stringify([joinRef, medalsRef, topic, "medals", {}]));
+        return;
+      }
+      if (ref === profileRef) {
+        try {
+          joinedProfile = mergeOfficialProfiles(joinedProfile, extractOfficialProfileFromPhoenixReply(payload, userId), userId);
+          if (delayedSnapshot && joinedProfile) {
+            delayedSnapshot = { ...delayedSnapshot, profile: mergeOfficialProfiles(delayedSnapshot.profile, joinedProfile, userId) };
+          }
+        } catch {
+          // 某些官方版本不回應明確 profile 事件，保留 update_data 作為 fallback。
+        }
         return;
       }
       if (ref === medalsRef) {
@@ -187,6 +200,7 @@ export function requestOfficialProfile(userId: string, userToken: string, timeou
     const socket = new WebSocket(buildOfficialMedalsSocketUrl(userToken));
     const topic = `player:${userId}`;
     const joinRef = "rf-profile-join";
+    const profileRef = "rf-profile-request";
     let complete = false;
     let profile: OfficialPlayerProfile | undefined;
     const finish = (error?: Error, result?: OfficialPlayerProfile) => {
@@ -208,7 +222,16 @@ export function requestOfficialProfile(userId: string, userToken: string, timeou
         if (profile?.playerName || profile?.unionName) finish(undefined, profile);
         return;
       }
-      if (frame[3] !== "phx_reply" || frame[1] !== joinRef) return;
+      if (frame[3] !== "phx_reply") return;
+      if (frame[1] === joinRef) {
+        const joined = asObject(frame[4]);
+        if (joined?.status !== "ok") { finish(new Error("player channel 未接受本次玩家資料查詢。")); return; }
+        profile = mergeOfficialProfiles(profile, extractProfileFromResponse(joined.response, userId), userId);
+        socket.send(JSON.stringify([joinRef, profileRef, topic, "profile", { user_id: userId }]));
+        if (profile?.playerName || profile?.unionName) finish(undefined, profile);
+        return;
+      }
+      if (frame[1] !== profileRef) return;
       try { finish(undefined, extractOfficialProfileFromPhoenixReply(frame[4], userId)); }
       catch (error) { finish(error instanceof Error ? error : new Error("玩家資料回應無法處理。")); }
     };
