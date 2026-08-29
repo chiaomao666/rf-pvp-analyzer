@@ -340,3 +340,5 @@
 - [ ] 分析官方登入 API 的 `origin: null` CORS 與 `504 Gateway Timeout` 錯誤，改善 GitHub Pages 登入錯誤處理或確認安全替代流程；不得要求使用者貼出帳密。
 
 - [x] 將所有「遊戲玩家工作區」改為玩家名稱＋聯盟名稱＋玩家 ID，格式比照隊伍身分顯示，並完成 GitHub Pages 響應式驗證。
+
+- [x] 根據登入／WebSocket player profile 資料補抓玩家名稱、聯盟名稱與玩家 ID，修正登入後工作區顯示「未提供玩家名稱／聯盟名稱」的問題，並完成前後端相容測試。

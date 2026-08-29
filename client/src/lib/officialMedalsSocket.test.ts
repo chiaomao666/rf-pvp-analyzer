@@ -48,10 +48,10 @@ describe("official medals socket", () => {
       const socket = FakeWebSocket.instances[0];
       socket.open();
       expect(socket.sent.map(entry => JSON.parse(entry)[3])).toEqual(["phx_join"]);
-      socket.message(["rf-medals-join", "rf-medals-join", "player:918", "phx_reply", { status: "ok", response: { rank: 1 } }]);
+      socket.message(["rf-medals-join", "rf-medals-join", "player:918", "phx_reply", { status: "ok", response: { id: 918, nickname: "俏貓紅蝶天紋斬", organization: { name: "RF聯盟" }, rank: 1 } }]);
       expect(socket.sent.map(entry => JSON.parse(entry)[3])).toEqual(["phx_join", "medals"]);
       socket.message(["rf-medals-join", "rf-medals-request", "player:918", "phx_reply", { status: "ok", response: { medals: [{ medal_id: 4 }], score: 6520, rank: 789, Union: { id: 12 } } }]);
-      await expect(pending).resolves.toMatchObject({ count: 1, items: [{ medal_id: 4 }] });
+      await expect(pending).resolves.toMatchObject({ count: 1, items: [{ medal_id: 4 }], profile: { externalUserId: "918", playerName: "俏貓紅蝶天紋斬", unionName: "RF聯盟" } });
     } finally {
       Object.defineProperty(globalThis, "WebSocket", { configurable: true, value: originalWebSocket });
     }

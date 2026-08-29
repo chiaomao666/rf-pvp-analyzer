@@ -89,7 +89,14 @@ export async function refreshOfficialMedals() {
     throw new Error("請先在本次工作階段完成官方登入，才能取得 medals 資料。重新整理或切換工作區後需要重新登入。");
   }
   const medalsSnapshot = await requestOfficialMedals(session.profile.externalUserId, memoryOnlyUserToken);
-  const profile: LocalProfile = { ...session.profile, medalsSnapshot };
+  const officialProfile = medalsSnapshot.profile;
+  const profile: LocalProfile = {
+    ...session.profile,
+    medalsSnapshot,
+    ...(officialProfile?.externalUserId ? { externalUserId: officialProfile.externalUserId } : {}),
+    ...(officialProfile?.playerName ? { playerName: officialProfile.playerName } : {}),
+    ...(officialProfile?.unionName ? { unionName: officialProfile.unionName } : {}),
+  };
   await upsertProfile(profile);
   session = { profile, verifiedThisSession: true };
   notify();
