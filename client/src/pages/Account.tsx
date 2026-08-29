@@ -1,12 +1,12 @@
 import { activateStoredWorkspace, createDemoWorkspace, getWorkspaceSession, loginOfficialAccount, logoutWorkspace, OfficialLoginError, refreshOfficialMedals, restoreStoredWorkspace } from "@/lib/accountWorkspace";
 import { BridgeMode, changeRemoteSitePassword, checkLocalBridge, getBridgeMode, getLocalBridgeCursor, isLocalBridgeEnabled, isRemoteSiteSessionActive, LocalBridgeStatus, loginRemoteSite, logoutRemoteSite, pollLocalBridge, setBridgeMode, setBridgeSyncSnapshot, setLocalBridgeCursor, setLocalBridgeEnabled } from "@/lib/localBridge";
-import { countUnscopedData, getActiveProfileId, ingestBridgeMatch, listProfiles, LocalProfile, migrateUnscopedDataToProfile, parsePvpJson } from "@/lib/localPvpStore";
+import { countUnscopedData, formatProfileIdentity, getActiveProfileId, ingestBridgeMatch, listProfiles, LocalProfile, migrateUnscopedDataToProfile, parsePvpJson } from "@/lib/localPvpStore";
 import { CheckCircle2, ChevronDown, ChevronRight, Database, Eye, EyeOff, KeyRound, Link2, LogIn, LogOut, RefreshCw, Search, ShieldAlert, Wifi, WifiOff } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type Status = { tone: "success" | "error" | "info"; text: string } | null;
 
-function profileLabel(profile: LocalProfile) { return profile.kind === "demo" ? "示範模式工作區" : profile.playerName || "遊戲玩家工作區"; }
+function profileLabel(profile: LocalProfile) { return formatProfileIdentity(profile); }
 function bridgeLabel(status: LocalBridgeStatus) { return status === "online" ? "BRIDGE ONLINE" : status === "checking" ? "CHECKING" : status === "disabled" ? "BRIDGE OFF" : "BRIDGE OFFLINE"; }
 
 export default function Account() {
@@ -183,7 +183,7 @@ export default function Account() {
       <aside className="panel workspace-panel">
         <header><span><Database size={17} /></span><div><p className="eyebrow">CURRENT LOCAL SCOPE</p><h2>目前工作區</h2><p>工作區資料只保存在目前瀏覽器，與其他裝置或網站 origin 不共用。</p></div></header>
         {session ? <div className="current-workspace"><b>{profileLabel(session.profile)}</b><small>{session.verifiedThisSession ? "本次已由官方登入流程確認" : "已選取的本機工作區；未於本次重新驗證"}</small><code>{session.profile.id}</code>{session.profile.medalsSnapshot && <div className="medals-snapshot"><b>MEDALS SNAPSHOT</b><span>{session.profile.medalsSnapshot.count} 枚 medals · {new Date(session.profile.medalsSnapshot.capturedAt).toLocaleString()}</span><small>本機只保留 player channel 回應中的 `medals` 陣列；不保留排名、積分或其他回應欄位。</small></div>}{session.verifiedThisSession && session.profile.kind === "official" && <button className="secondary-action medals-refresh" type="button" disabled={busy} onClick={() => void onRefreshMedals()}><RefreshCw size={14} />重新取得 medals</button>}<button className="text-action" type="button" disabled={busy} onClick={() => { logoutWorkspace(); setStatus({ tone: "info", text: "已登出本次登入狀態；本機工作區資料未刪除。" }); }}><LogOut size={14} />登出並取消選取</button></div> : <div className="empty-workspace"><ShieldAlert size={20} /><p>請登入、選取已存工作區，或開啟示範模式後再建立戰績。</p></div>}
-        {profiles.length > 0 && <div className="profile-list"><div className="profile-list-head"><p className="micro-label">此瀏覽器已知工作區 · {filteredProfiles.length}/{profiles.length}</p><button type="button" className="text-action" onClick={() => setShowWorkspaceList(value => !value)}>{showWorkspaceList ? "收合" : "展開"}</button></div>{showWorkspaceList && <><label className="workspace-search"><Search size={14} /><input value={profileQuery} onChange={event => setProfileQuery(event.target.value)} placeholder="搜尋帳號或工作區 ID" aria-label="搜尋工作區" /></label>{renderProfiles("OFFICIAL ACCOUNTS", officialProfiles, showOfficial, setShowOfficial)}{renderProfiles("DEMO WORKSPACES", demoProfiles, showDemo, setShowDemo)}</>}</div>}
+        {profiles.length > 0 && <div className="profile-list"><div className="profile-list-head"><p className="micro-label">此瀏覽器已知工作區 · {filteredProfiles.length}/{profiles.length}</p><button type="button" className="text-action" onClick={() => setShowWorkspaceList(value => !value)}>{showWorkspaceList ? "收合" : "展開"}</button></div>{showWorkspaceList && <><label className="workspace-search"><Search size={14} /><input value={profileQuery} onChange={event => setProfileQuery(event.target.value)} placeholder="搜尋玩家名稱、聯盟或玩家 ID" aria-label="搜尋工作區" /></label>{renderProfiles("OFFICIAL ACCOUNTS", officialProfiles, showOfficial, setShowOfficial)}{renderProfiles("DEMO WORKSPACES", demoProfiles, showDemo, setShowDemo)}</>}</div>}
       </aside>
     </div>
 

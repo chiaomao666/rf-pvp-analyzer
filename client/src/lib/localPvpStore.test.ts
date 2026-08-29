@@ -1,7 +1,7 @@
 import { IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { activateStoredWorkspace, loginOfficialAccount, logoutWorkspace } from "./accountWorkspace";
-import { countUnscopedData, exportLocalBackup, getMatch, importPvpJson, ingestBridgeMatch, listImports, listMatches, listProfiles, migrateUnscopedDataToProfile, parsePvpJson, restoreLocalBackup, saveMatch, setActiveProfileId, upsertProfile } from "./localPvpStore";
+import { countUnscopedData, exportLocalBackup, formatProfileIdentity, getMatch, importPvpJson, ingestBridgeMatch, listImports, listMatches, listProfiles, migrateUnscopedDataToProfile, parsePvpJson, restoreLocalBackup, saveMatch, setActiveProfileId, upsertProfile } from "./localPvpStore";
 
 beforeEach(() => {
   Object.defineProperty(globalThis, "indexedDB", { configurable: true, value: new IDBFactory() });
@@ -147,6 +147,17 @@ describe("帳號工作區隔離與備份", () => {
       kind: "cors-or-cloudflare",
     });
     expect(await listProfiles()).toEqual([]);
+  });
+});
+
+describe("工作區玩家身分格式", () => {
+  it("以玩家名稱、聯盟名稱與玩家 ID 組成工作區標籤", () => {
+    expect(formatProfileIdentity({ id: "official:832459", externalUserId: "832459", kind: "official", createdAt: 1, playerName: "俏貓紅蝶天紋斬", unionName: "RF 聯盟" })).toBe("俏貓紅蝶天紋斬 · RF 聯盟 (玩家ID: 832459)");
+  });
+
+  it("缺少聯盟或玩家 ID 時仍保留可讀且不虛構的 fallback", () => {
+    expect(formatProfileIdentity({ id: "official:unknown", kind: "official", createdAt: 1, playerName: "玩家" })).toBe("玩家 · 未提供聯盟名稱");
+    expect(formatProfileIdentity({ id: "demo", kind: "demo", createdAt: 1 })).toBe("示範模式工作區");
   });
 });
 

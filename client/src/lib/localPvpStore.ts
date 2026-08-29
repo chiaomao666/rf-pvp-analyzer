@@ -3,6 +3,15 @@ import type { TeamMember } from "@/components/PvpUi";
 export type PvpOutcome = "win" | "loss" | "draw" | "unknown";
 export type PvpMode = "1v1" | "3v3" | "5v5";
 export type LocalProfile = { id: string; externalUserId?: string; kind: "official" | "demo"; createdAt: number; lastVerifiedAt?: number; playerName?: string; unionName?: string; medalsSnapshot?: { capturedAt: number; count: number; items: unknown[] } };
+export function formatProfileIdentity(profile: LocalProfile | null | undefined) {
+  if (!profile) return "選擇工作區";
+  if (profile.kind === "demo") return "示範模式工作區";
+  const playerName = profile.playerName?.trim() || "未提供玩家名稱";
+  const unionName = profile.unionName?.trim();
+  const playerId = profile.externalUserId?.trim();
+  const secondary = unionName || playerId ? `${unionName || "未提供聯盟名稱"}${playerId ? ` (玩家ID: ${playerId})` : ""}` : "未提供聯盟名稱";
+  return `${playerName} · ${secondary}`;
+}
 export type LocalPvpMatch = { id: number; profileId?: string; battleAt: number; mode: PvpMode; outcome: PvpOutcome; playerTeam: TeamMember[]; opponentTeam: TeamMember[]; playerName?: string; playerUnion?: string; playerId?: string; opponentName?: string; opponentUnion?: string; opponentPlayerId?: string; rankBefore?: number; rankAfter?: number; scoreBefore?: number; scoreAfter?: number; notes?: string; sourceBattleChannel?: string; sourceBattleId?: string; rawPayload?: unknown; unrecognizedFields?: Record<string, unknown>; createdAt: number; updatedAt: number };
 export type LocalImportBatch = { id: number; profileId?: string; receivedAt: number; label: string; recognizedCount: number; rejectedCount: number; warnings: string[] };
 export type MatchInput = Omit<LocalPvpMatch, "id" | "createdAt" | "updatedAt" | "profileId"> & { profileId?: string };

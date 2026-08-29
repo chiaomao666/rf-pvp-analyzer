@@ -1,6 +1,6 @@
 import { ChevronDown, Database, LayoutDashboard, PlusSquare, Shield, UserRound } from "lucide-react";
 import { getWorkspaceSession, restoreStoredWorkspace } from "@/lib/accountWorkspace";
-import { getActiveProfileId } from "@/lib/localPvpStore";
+import { formatProfileIdentity, getActiveProfileId } from "@/lib/localPvpStore";
 import BuildStatusFooter from "@/components/BuildStatusFooter";
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
@@ -12,9 +12,7 @@ const navigation = [
 ];
 
 function profileLabel(session: ReturnType<typeof getWorkspaceSession>) {
-  if (!session) return "選擇工作區";
-  if (session.profile.kind === "demo") return "示範模式";
-  return session.profile.playerName || "遊戲玩家工作區";
+  return formatProfileIdentity(session?.profile);
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -34,7 +32,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {navigation.map(item => { const active = item.href === "/" ? location === "/" : location === item.href || location.startsWith(`${item.href}/`); const Icon = item.icon; return <Link key={item.href} href={item.href} className={active ? "active" : ""}><Icon size={15} />{item.label}</Link>; })}
           <Link href="/account" className={location.startsWith("/account") ? "active workspace-nav-link" : "workspace-nav-link"}><UserRound size={15} />帳號工作區</Link>
         </nav>
-        <Link href="/account" className="account-zone" aria-label="開啟帳號工作區"><span className="presence-dot" /><div className="account-copy"><b>{profileLabel(session)}</b><small>{session?.profile.unionName || (session?.verifiedThisSession ? "VERIFIED THIS SESSION" : "LOCAL WORKSPACE")}</small></div><ChevronDown size={14} className="account-chevron" /></Link>
+        <Link href="/account" className="account-zone" aria-label="開啟帳號工作區"><span className="presence-dot" /><div className="account-copy"><b>{profileLabel(session)}</b><small>{session?.verifiedThisSession ? "VERIFIED THIS SESSION" : session ? "LOCAL WORKSPACE" : "尚未選取帳號"}</small></div><ChevronDown size={14} className="account-chevron" /></Link>
       </header>
       <main className="workspace">{children}</main>
       <BuildStatusFooter />
