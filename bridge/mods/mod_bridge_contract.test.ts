@@ -69,6 +69,7 @@ describe("approved PVP mod bridge contract", () => {
     expect(guard).toContain('text.includes("5v5")');
     expect(guard).toContain('asObject(response?.["5v5"])');
     expect(guard).toContain('asObject(nestedMedals?.["5v5"])');
+    expect(guard).toContain("Array.isArray(response?.medals) && response.medals.length > 0");
   });
 
   it("captures AniDoor player and union identities and forwards the fields", () => {
@@ -93,7 +94,7 @@ describe("approved PVP mod bridge contract", () => {
 
   it("accepts current player medals even when previous_record is absent", () => {
     const guard = read("pvp_double_match_guard.js");
-    expect(guard).toContain("const hasCurrentResult = hasTopLevelMode || hasNestedMode;");
+    expect(guard).toContain("const hasCurrentResult = hasTopLevelMode || hasNestedMode || hasMedalsArray;");
     expect(guard).toContain("|| !hasCurrentResult) return null;");
     expect(guard).toContain("extractMedalsMetrics");
   });
@@ -130,3 +131,13 @@ describe("approved PVP mod bridge contract", () => {
     expect(embeddedClient).not.toMatch(/password|user_token|authorization|cookie|rawEvent|rawFrame|rawEvents/i);
   });
 });
+
+  it("accepts opponent surrender settlement when player medals is an array", () => {
+    const guard = read("pvp_double_match_guard.js");
+    expect(guard).toContain("extractSurrenderUserId");
+    expect(guard).toContain('terminalAction: "surrender"');
+    expect(guard).toContain('terminalAction: "player_medals"');
+    expect(guard).toContain("const hasMedalsArray = Array.isArray(response?.medals) && response.medals.length > 0;");
+    expect(guard).toContain("const medalsArrayEvidence = Array.isArray(response?.medals) && response.medals.length > 0;");
+    expect(guard).toContain("resultEvidencePending");
+  });

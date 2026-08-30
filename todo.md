@@ -352,3 +352,7 @@
 - [x] 查明 GitHub Pages 實際 bundle 與工作區讀取後仍缺少玩家名稱、聯盟名稱與 ID 的原因
 - [x] 核對官方 login／player channel 的真實身份欄位與事件順序，避免只依猜測擴充 parser
 - [x] 修復並測試仍未顯示身份資料的實際缺口
+- [ ] 盤點對手投降場景實際收到的官方 PVP 結束訊框與目前辨識缺口
+- [ ] 修復對手投降時的戰績聚合、結果判定與 Worker 傳送
+- [ ] 新增對手投降回歸測試並直接交付更新後的 pvp_double_match_guard.js
+- [ ] 推送 GitHub Pages／mod 相關修復並確認 Actions 部署狀態

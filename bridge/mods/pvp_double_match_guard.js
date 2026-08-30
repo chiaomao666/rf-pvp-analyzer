@@ -366,7 +366,7 @@
     const response = unwrapPhoenixResponse(payload);
     if (channel.includes("pvp")) return true;
     if (name.includes("pvp")) return true;
-    if (/^player:\d+$/i.test(channel) && asObject(response?.medals)) return true;
+    if (/^player:\d+$/i.test(channel) && (asObject(response?.medals) || (Array.isArray(response?.medals) && response.medals.length > 0))) return true;
     // 載入器僅在官方結果頁才轉送 player channel 全部回覆；完整保留以取得版本差異下的 medals 回覆包裝。
     if (/^player:\d+$/i.test(channel) && location.hash.toLowerCase().includes("/pvpresult")) return true;
     if (["battle_result", "team_confirmed", "surrender"].includes(name)) {
@@ -701,16 +701,110 @@
     return Boolean(warriors && Object.keys(warriors).length > 0);
   }
 
-  function findTerminalBattleSnapshot(battleEvents) {
+  function extractSurrenderUserId(value, depth = 0) {
+    if (depth > 5 || value === null || value === undefined) return undefined;
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = extractSurrenderUserId(item, depth + 1);
+        if (found !== undefined) return found;
+      }
+      return undefined;
+    }
+    const object = asObject(value);
+    if (!object) return undefined;
+    for (const key of ["surrender_user_id", "surrendered_user_id", "forfeit_user_id", "surrenderUserId", "surrenderedUserId"]) {
+      const found = normalisePositiveInt(object[key]);
+      if (found !== undefined) return String(found);
+    }
+    for (const key of ["response", "payload", "data", "result", "battle_result", "battle", "state", "round", "medals", "previous_record"]) {
+      const found = extractSurrenderUserId(object[key], depth + 1);
+      if (found !== undefined) return found;
+    }
+    // 部分 Phoenix 回覆不固定包裝名稱；在有限深度內檢查其他物件欄位，
+    // 避免 surrender_user_id 被放在未知的結果節點而遺失。
+    for (const [key, child] of Object.entries(object)) {
+      if (["response", "payload", "data", "result", "battle_result", "battle", "state", "round", "medals", "previous_record"].includes(key)) continue;
+      const found = extractSurrenderUserId(child, depth + 1);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  }
+
+  function hasSurrenderAction(value, depth = 0) {
+    if (depth > 5 || value === null || value === undefined) return false;
+    const text = typeof value === "string" ? value.trim().toLowerCase() : "";
+    if (["surrender", "forfeit", "resign", "resigned", "concede", "conceded"].includes(text)) return true;
+    if (Array.isArray(value)) return value.some((item) => hasSurrenderAction(item, depth + 1));
+    const object = asObject(value);
+    if (!object) return false;
+    const action = String(firstValue(object, ["next_action", "action", "event", "type", "status"]) || "").trim().toLowerCase();
+    if (["surrender", "forfeit", "resign", "resigned", "concede", "conceded"].includes(action)) return true;
+    const nestedKeys = ["response", "payload", "data", "result", "battle_result", "battle", "state", "round", "medals", "previous_record"];
+    if (nestedKeys.some((key) => hasSurrenderAction(object[key], depth + 1))) return true;
+    return Object.entries(object).some(([key, child]) => !nestedKeys.includes(key) && hasSurrenderAction(child, depth + 1));
+  }
+
+  function isSurrenderEvidence(capturedEvent) {
+    return hasSurrenderAction(capturedEvent?.event) || hasSurrenderAction(capturedEvent?.payload) || extractSurrenderUserId(capturedEvent?.payload) !== undefined;
+  }
+
+  function findLatestWarriorsSnapshot(battleEvents, atTime = Number.POSITIVE_INFINITY) {
+    for (let index = battleEvents.length - 1; index >= 0; index -= 1) {
+      const capturedEvent = battleEvents[index];
+      if (Number(capturedEvent?.capturedAt || 0) > atTime) continue;
+      const payload = unwrapPhoenixResponse(capturedEvent.payload);
+      const round = asObject(payload?.round);
+      if (hasWarriors(round?.warriors)) return { capturedEvent, payload };
+    }
+    return null;
+  }
+
+  function findTerminalBattleSnapshot(battleEvents, surrenderEvents = []) {
     for (let index = battleEvents.length - 1; index >= 0; index -= 1) {
       const capturedEvent = battleEvents[index];
       const payload = unwrapPhoenixResponse(capturedEvent.payload);
       const round = asObject(payload?.round);
       if (String(payload?.next_action || "").toLowerCase() === "medals" && hasWarriors(round?.warriors)) {
-        return { capturedEvent, payload };
+        return { capturedEvent, payload, terminalAction: "medals" };
       }
     }
-    return null;
+
+    // 官方對手投降時，pvp channel 的成功回覆可能只有 surrender_user_id，
+    // 後續 player medals 才帶 score/rank；因此使用投降訊號作終局觸發器，
+    // 但仍必須找到同一 battle channel 在投降前收到的 warriors 快照。
+    const candidates = [...battleEvents, ...(Array.isArray(surrenderEvents) ? surrenderEvents : [])]
+      .filter(isSurrenderEvidence)
+      .sort((left, right) => Number(left?.capturedAt || 0) - Number(right?.capturedAt || 0));
+    const surrenderEvent = candidates[candidates.length - 1];
+    if (surrenderEvent) {
+      const surrenderAt = Number(surrenderEvent.capturedAt || Number.POSITIVE_INFINITY);
+      const warriorsSnapshot = findLatestWarriorsSnapshot(battleEvents, surrenderAt);
+      if (warriorsSnapshot) {
+        return {
+          ...warriorsSnapshot,
+          terminalAction: "surrender",
+          surrenderEvidence: redactAndClone(unwrapPhoenixResponse(surrenderEvent.payload)),
+        };
+      }
+    }
+
+    // 對手投降時，某些版本只被動收到 player:<id> 的 medals 結果，
+    // pvp_battle channel 的 surrender／medals 狀態不一定會被觀察器轉送。
+    // player medals 是官方結算證據，因此可用其抵達時間找回同場 warriors；
+    // 上傳仍會等 enrichRecordsWithPlayerMedals 寫入 resultEvidence。
+    const resultEvent = (Array.isArray(surrenderEvents) ? surrenderEvents : [])
+      .slice()
+      .sort((left, right) => Number(left?.capturedEvent?.capturedAt || 0) - Number(right?.capturedEvent?.capturedAt || 0))
+      .at(-1);
+    if (!resultEvent) return null;
+    const resultAt = Number(resultEvent.capturedEvent?.capturedAt || Number.POSITIVE_INFINITY);
+    const warriorsSnapshot = findLatestWarriorsSnapshot(battleEvents, resultAt);
+    if (!warriorsSnapshot) return null;
+    return {
+      ...warriorsSnapshot,
+      terminalAction: "player_medals",
+      resultEvidence: redactAndClone(resultEvent.response),
+    };
   }
 
   /**
@@ -725,10 +819,13 @@
         const nestedMedals = asObject(response?.medals);
         const hasTopLevelMode = Boolean(asObject(response?.["1v1"]) || asObject(response?.["3v3"]) || asObject(response?.["5v5"]));
         const hasNestedMode = Boolean(asObject(nestedMedals?.["1v1"]) || asObject(nestedMedals?.["3v3"]) || asObject(nestedMedals?.["5v5"]));
+        const hasMedalsArray = Array.isArray(response?.medals) && response.medals.length > 0;
         const hasPreviousRecord = Boolean(asObject(response?.previous_record) || asObject(nestedMedals?.previous_record));
         // 某些結果回覆只帶目前 medals 與 score/rank，不帶 previous_record；仍可保存戰績，
         // 但 extractMedalsMetrics 會在缺少前值時保留 unknown／缺少的變化欄位，不做推測。
-        const hasCurrentResult = hasTopLevelMode || hasNestedMode;
+        // 投降結算的另一種官方格式只有非空 medals 陣列；它仍是官方結算證據，
+        // 因此允許建立 unknown 結果，不能因沒有模式物件而整包丟掉。
+        const hasCurrentResult = hasTopLevelMode || hasNestedMode || hasMedalsArray;
         if (!/^player:\d+$/i.test(String(capturedEvent?.topic || "")) || !hasCurrentResult) return null;
         return { capturedEvent, response };
       })
@@ -744,11 +841,12 @@
   function extractMedalsMetrics(response, mode) {
     const nestedMedals = asObject(response?.medals);
     const current = asObject(response?.[mode]) || asObject(nestedMedals?.[mode]);
+    const medalsArrayEvidence = Array.isArray(response?.medals) && response.medals.length > 0;
     const previous = asObject(asObject(response?.previous_record)?.[mode]) || asObject(asObject(nestedMedals?.previous_record)?.[mode]);
-    if (!current) return null;
-    const scoreAfter = normaliseNonNegativeInt(current.score);
+    if (!current && !medalsArrayEvidence) return null;
+    const scoreAfter = normaliseNonNegativeInt(current?.score);
     const scoreBefore = normaliseNonNegativeInt(previous?.score);
-    const rankAfter = normalisePositiveInt(current.rank);
+    const rankAfter = normalisePositiveInt(current?.rank);
     const rankBefore = normalisePositiveInt(previous?.rank);
     const scoreChange = scoreAfter !== undefined && scoreBefore !== undefined ? scoreAfter - scoreBefore : undefined;
     const rankChange = rankAfter !== undefined && rankBefore !== undefined ? rankBefore - rankAfter : undefined;
@@ -807,8 +905,9 @@
 
   /**
    * 真實 PVP 協定會將配對、玩家身分、戰鬥狀態與最終角色快照分散在多個訊框。
-   * 僅在 player:<id> 的 matched 訊框、該戰鬥的雙方初始狀態，以及 medals 終局快照
-   * 都存在時建立紀錄。勝負與排名不會從血量、獎牌動畫或畫面推測。
+   * 僅在 player:<id> 的 matched 訊框、該戰鬥的雙方初始狀態、同場 warriors 快照，
+   * 以及 player medals 終局結果都存在時建立紀錄。投降只作為終局觸發器，
+   * 勝負與排名仍只由官方 medals 的 score/rank 變化決定。
    */
   function aggregatePvpBattleRecords(events) {
     const matchedByChannel = new Map();
@@ -840,7 +939,8 @@
     for (const [channel, matched] of matchedByChannel.entries()) {
       const battleEvents = eventsByChannel.get(channel) || [];
       const initial = findInitialBattleSnapshot(battleEvents);
-      const terminal = findTerminalBattleSnapshot(battleEvents);
+      const playerMedalsEvents = findPlayerMedalsEvents(events, matched.playerUserId);
+      const terminal = findTerminalBattleSnapshot(battleEvents, playerMedalsEvents);
       if (!initial || !terminal) continue;
 
       const offender = asObject(initial.payload.offender);
@@ -877,8 +977,9 @@
         sourcePlayerTopic: matched.capturedEvent.topic,
         sourcePlayerUserId: matched.playerUserId,
         playerSide: iamDefender ? "defender" : "offender",
-        terminalAction: "medals",
+        terminalAction: terminal.terminalAction || "medals",
         sourceEventCount: battleEvents.length,
+        ...(terminal.resultEvidence ? { resultEvidencePending: true } : {}),
         sourceEvents: battleEvents.map((event) => ({
           capturedAt: event.capturedAt,
           capturedAtIso: event.capturedAtIso,
@@ -889,6 +990,8 @@
           matched: matched.payload,
           initial: initial.payload,
           terminal: terminal.payload,
+          ...(terminal.surrenderEvidence ? { surrender: terminal.surrenderEvidence } : {}),
+          ...(terminal.resultEvidence ? { resultMedals: terminal.resultEvidence } : {}),
           player: player ? redactAndClone(player) : undefined,
           opponent: opponent ? redactAndClone(opponent) : undefined,
         },
@@ -1090,7 +1193,7 @@
     };
     document.getElementById("rf-pvp-copy-btn").onclick = async () => {
       const diagnostics = {
-        guardVersion: 15,
+        guardVersion: 16,
         transport: window.__RF_PVP_SOCKET_TAP__?.getStatus?.() || { attached: false, message: transportMessage },
         bridge: getSafeBridgeDiagnostics(),
         captureStats: readCaptureStats(),
@@ -1171,7 +1274,7 @@
     getCapturedEvents: () => readArray(EVENT_KEY),
     getAnalyzerRecords: () => uniqueAnalyzerRecords(analyzerEventPool(readArray(EVENT_KEY))),
     getCaptureDiagnostics: () => ({
-      guardVersion: 15,
+      guardVersion: 16,
       captureStats: readCaptureStats(),
       capturedSinceLoad,
       transport: window.__RF_PVP_SOCKET_TAP__?.getStatus?.() || null,
@@ -1204,5 +1307,5 @@
   if (document.readyState === "complete") createUIPanel();
   else window.addEventListener("load", createUIPanel, { once: true });
   attachTransportTap();
-  console.log(`[${MOD_NAME}] v14 已載入；會安全顯示寫入密鑰為未載入、空白或已設定，且 health heartbeat 與戰績上傳都使用同一組密鑰。僅被動保存 PVP 封包及安全分類摘要，不會攔截 Phoenix 或改寫官方訊框。`);
+  console.log(`[${MOD_NAME}] v16 已載入；會安全顯示寫入密鑰為未載入、空白或已設定，且 health heartbeat 與戰績上傳都使用同一組密鑰。僅被動保存 PVP 封包及安全分類摘要，不會攔截 Phoenix 或改寫官方訊框。`);
 })();
