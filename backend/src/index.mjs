@@ -148,6 +148,64 @@ export default {
         const latest = await env.DB.prepare("SELECT COALESCE(MAX(id), 0) AS id FROM pvp_events WHERE workspace_id = ?").bind(workspaceId).first();
         return json({ events, latestEventId: Number(latest?.id || 0), durable: true }, 200, headers);
       }
+      // ---- 排名資料上傳 (POST /api/pvp/rankings) ----
+      // 需要 X-RF-Write-Secret，由 rankings_uploader.js 呼叫
+      if (request.method === "POST" && url.pathname === "/api/pvp/rankings") {
+        if (!writeAuthorized(request, env)) return json({ error: "unauthorized" }, 401, headers);
+        const body = asObject(await readBody(request));
+        const mode = safeText(body?.mode, 10);
+        if (!mode || !ALLOWED_MODES.has(mode) && mode !== "1v1" && mode !== "3v3")
+          return json({ error: "mode 必須是 1v1 或 3v3" }, 400, headers);
+        const entries = Array.isArray(body?.entries) ? body.entries : [];
+        if (!entries.length) return json({ error: "entries 不可為空" }, 400, headers);
+        const capturedAt = Date.now();
+        const stmt = env.DB.prepare(
+          "INSERT INTO pvp_rankings (player_id, mode, rank, player_name, organization, nation_id, captured_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(player_id, mode) DO UPDATE SET rank = excluded.rank, player_name = excluded.player_name, organization = excluded.organization, nation_id = excluded.nation_id, captured_at = excluded.captured_at"
+        );
+        const batch = entries.slice(0, 900).map((entry, idx) => {
+          const playerId = String(entry?.id || "").trim();
+          const playerName = safeText(entry?.name, 120);
+          const organization = safeText(entry?.organization, 120);
+          const nationId = Number(entry?.nation_id);
+          const rank = Number(entry?.rank ?? idx + 1);
+          if (!playerId || !playerName) return null;
+          return stmt.bind(playerId, mode, rank, playerName, organization || null, Number.isFinite(nationId) ? nationId : null, capturedAt);
+        }).filter(Boolean);
+        if (!batch.length) return json({ error: "沒有有效的資料" }, 400, headers);
+        await env.DB.batch(batch);
+        return json({ accepted: true, count: batch.length }, 202, headers);
+      }
+
+      // ---- 排名資料查詢 (GET /api/pvp/rankings) ----
+      // 公開端點，不需要登入，讓排行榜頁面直接讀取
+      if (request.method === "GET" && url.pathname === "/api/pvp/rankings") {
+        const mode = url.searchParams.get("mode") || "1v1";
+        const limit = Math.min(900, Math.max(1, Number.parseInt(url.searchParams.get("limit") || "100", 10) || 100));
+        const offset = Math.max(0, Number.parseInt(url.searchParams.get("offset") || "0", 10) || 0);
+        const nation = url.searchParams.get("nation_id");
+        const q = safeText(url.searchParams.get("q"), 100);
+        let query = "SELECT player_id, mode, rank, player_name, organization, nation_id, captured_at FROM pvp_rankings WHERE mode = ?";
+        const params = [mode];
+        if (nation) { query += " AND nation_id = ?"; params.push(Number(nation)); }
+        if (q) { query += " AND (player_name LIKE ? OR organization LIKE ?)"; params.push(`%${q}%`, `%${q}%`); }
+        query += " ORDER BY rank ASC LIMIT ? OFFSET ?";
+        params.push(limit, offset);
+        const rows = await env.DB.prepare(query).bind(...params).all();
+        const countQuery = "SELECT COUNT(*) AS total FROM pvp_rankings WHERE mode = ?" + (nation ? " AND nation_id = ?" : "") + (q ? " AND (player_name LIKE ? OR organization LIKE ?)" : "");
+        const countParams = nation && q ? [mode, Number(nation), `%${q}%`, `%${q}%`] : nation ? [mode, Number(nation)] : q ? [mode, `%${q}%`, `%${q}%`] : [mode];
+        const total = await env.DB.prepare(countQuery).bind(...countParams).first();
+        const latest = await env.DB.prepare("SELECT MAX(captured_at) AS ts FROM pvp_rankings WHERE mode = ?").bind(mode).first();
+        return json({
+          mode, total: Number(total?.total || 0), limit, offset,
+          capturedAt: Number(latest?.ts || 0),
+          entries: (rows.results || []).map(r => ({
+            rank: Number(r.rank), playerId: String(r.player_id),
+            playerName: r.player_name, organization: r.organization,
+            nationId: Number(r.nation_id)
+          }))
+        }, 200, headers);
+      }
+
       return json({ error: "not found" }, 404, headers);
     } catch (error) { console.error("PVP worker request failed", error); return json({ error: "server error" }, 500, headers); }
   },
