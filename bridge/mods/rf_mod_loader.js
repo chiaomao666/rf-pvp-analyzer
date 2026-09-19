@@ -1,13 +1,23 @@
 // loader.js - 統一管理所有小工具的載入
-// index.html 只需要掛這一支，其他工具都寫在下面的 TOOLS 清單裡集中管理
+// assets/index.html 只需要掛這一支；所有 mod 檔案固定放在 assets/mods/。
 console.log("[LOADER] 小工具載入器啟動");
 
 (function(){
     // ---- 在這裡集中管理所有小工具 ----
     const TOOLS = [
-        // 必須最先載入，讓 pvp_double_match_guard.js 初始化前取得 Worker endpoint 與 API key。
+        // 固定位置：assets/mods/rf_pvp_backend_config.js；必須最先載入，讓守衛初始化前取得 Worker 設定。
         { id: "RF PVP Worker 連線設定",
-            src: "./mods/TOOLS/rf_pvp_backend_config.js",
+            src: "./mods/rf_pvp_backend_config.js",
+            css: null,
+            enabled: true
+        },
+        { id: "PVP Socket 被動觀察器",
+            src: "./mods/rf_pvp_socket_tap.js",
+            css: null,
+            enabled: true
+        },
+        { id: "排名戰戰績被動監控",
+            src: "./mods/pvp_double_match_guard.js",
             css: null,
             enabled: true
         },
@@ -19,22 +29,17 @@ console.log("[LOADER] 小工具載入器啟動");
         { id: "戰鬥硬體加速",
             src: null,
             css: "./mods/battle_css_accel.css",
-            enabled: true
-        },
-        { id: "動畫加速",
-            src: null,
-            css: null,
             enabled: false
         },
         { id: "戰鬥等待加速",
             src: "./mods/battle_wait_speed.js",
             css: null,
-            enabled: true
+            enabled: false
         },
         { id: "戰鬥動畫跳過",
             src: "./mods/battle_skip_anim.js",
             css: null,
-            enabled: true
+            enabled: false
         },
         { id: "顯示角色最高等級",
             src: "./mods/show_level_cap.js",
@@ -86,11 +91,6 @@ console.log("[LOADER] 小工具載入器啟動");
             css: null,
             enabled: false
         },
-        { id: "排名戰重複配對攔截",
-            src: "./mods/pvp_double_match_guard.js",
-            css: null,
-            enabled: true
-        },
         { id: "Mod 效能分析器",
             src: "./mods/rf_mod_profiler.js",
             css: null,
@@ -104,178 +104,111 @@ console.log("[LOADER] 小工具載入器啟動");
         { id: "首頁齒輪效能優化",
             src: "./mods/home_gear_blocker.js",
             css: null,
+            enabled: false
+        },
+        { id: "DCContext 監測",
+            src: "./mods/dc_monitor_capture.js",
+            css: null,
+            enabled: true
+        },
+        { id: "RF 地下世界故事擷取",
+            src: "./mods/rf_uw_capture.js - 捷徑.lnk",
+            css: null,
+            enabled: true
+        },
+        { id: "city_uploader",
+            src: "./mods/city_uploader.js",
+            css: null,
             enabled: true
         },
     ];
 
     const STORAGE_KEY = "uw_loader_config";
+    const WINDOW_STORAGE_KEY = "__uw_loader_config__";
+
+    function storageGet(){
+        // fallback 優先：localStorage 可能保留著過期設定，但 window.name/cookie
+        // 才是上一輪 quota fallback 寫入的最新設定。
+        try {
+            if (window.name.indexOf(WINDOW_STORAGE_KEY + "=") === 0) {
+                return window.name.slice((WINDOW_STORAGE_KEY + "=").length);
+            }
+        } catch (e) {}
+        try {
+            const match = document.cookie.match(new RegExp("(?:^|; )" + STORAGE_KEY.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&") + "=([^;]*)"));
+            if (match) return decodeURIComponent(match[1]);
+        } catch (e) {}
+        try {
+            const raw = window.localStorage.getItem(STORAGE_KEY);
+            if (raw) return raw;
+        } catch (e) {
+            return null;
+        }
+        return null;
+    }
+
+    function storageSet(raw){
+        let saved = false;
+        try {
+            window.localStorage.setItem(STORAGE_KEY, raw);
+            saved = window.localStorage.getItem(STORAGE_KEY) === raw;
+        } catch (e) {
+            // localStorage quota 滿時不把原始例外刷到 Console，直接使用 fallback。
+        }
+        if (saved) return true;
+        try {
+            document.cookie = STORAGE_KEY + "=" + encodeURIComponent(raw) + "; path=/; max-age=31536000; SameSite=Lax";
+            saved = document.cookie.indexOf(STORAGE_KEY + "=") >= 0;
+        } catch (e) {}
+        if (saved) return true;
+        try {
+            window.name = WINDOW_STORAGE_KEY + "=" + raw;
+            return window.name === WINDOW_STORAGE_KEY + "=" + raw;
+        } catch (e) { return false; }
+    }
 
     function loadConfig(){
         try {
-            const raw = localStorage.getItem(STORAGE_KEY);
+            const raw = storageGet();
             return raw ? JSON.parse(raw) : {};
         } catch (e) {
+            console.warn("[LOADER] 設定格式無效，使用預設值", e);
             return {};
         }
     }
 
     function saveConfig(cfg){
-        try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
-        } catch (e) {
-            console.warn("[LOADER] 設定儲存失敗", e);
+        const raw = JSON.stringify(cfg);
+        if (!storageSet(raw)) {
+            console.warn("[LOADER] 設定儲存失敗：此頁面禁止 localStorage、cookie 與 window.name");
+            return false;
         }
+        console.log("[LOADER] 設定已保存");
+        return true;
     }
 
     function isEnabled(tool, cfg){
         return Object.prototype.hasOwnProperty.call(cfg, tool.id) ? cfg[tool.id] : tool.enabled;
     }
 
-    // PVP 守衛需要在官方主程式建立 Socket 前開始被動觀察，否則舊連線無法補掛 message listener。
-    // 此觀察器不修改、不延遲、也不丟棄任何 WebSocket 封包；它只將排名戰相關的已接收訊框交給守衛。
-    function installPvpSocketTap(){
-        const existingTap = window.__RF_PVP_SOCKET_TAP__;
-        if (existingTap && typeof existingTap.ensure === "function") {
-            existingTap.ensure();
-            return existingTap;
-        }
-        if (existingTap) return existingTap;
-
-        const subscribers = new Set();
-        const stats = { installedAt: Date.now(), socketCount: 0, receivedMessageCount: 0, forwardedFrameCount: 0, candidateFrameCount: 0, lastCandidate: null, reinstallCount: 0 };
-        let ObservedWebSocket = null;
-
-        function decodeFrame(data){
-            if (typeof data !== "string") return { raw: String(data), topic: "", event: "", payload: null };
-            try {
-                const decoded = JSON.parse(data);
-                if (Array.isArray(decoded)) {
-                    return { raw: decoded, topic: String(decoded[2] || ""), event: String(decoded[3] || ""), payload: decoded[4] ?? null };
-                }
-                if (decoded && typeof decoded === "object") {
-                    return {
-                        raw: decoded,
-                        topic: String(decoded.topic || decoded.channel || ""),
-                        event: String(decoded.event || decoded.type || ""),
-                        payload: decoded.payload ?? decoded.data ?? null,
-                    };
-                }
-                return { raw: decoded, topic: "", event: "", payload: null };
-            } catch (error) {
-                return { raw: data, topic: "", event: "", payload: null };
-            }
-        }
-
-        function hasRankingArrays(payload){
-            const value = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : null;
-            if (!value) return false;
-            const modes = ["1v1", "3v3", "5v5"];
-            const candidate = (item) => Array.isArray(item) || Boolean(item && typeof item === "object" && ["entries", "players", "ranking", "rankings", "list", "data"].some((key) => Array.isArray(item[key])));
-            if (modes.some((mode) => candidate(value[mode]))) return true;
-            const nested = value.response && typeof value.response === "object" ? value.response : value;
-            if (modes.some((mode) => candidate(nested[mode]))) return true;
-            const rankings = nested.rankings || nested.leaderboard || nested.ranking;
-            return Boolean(rankings && typeof rankings === "object" && modes.some((mode) => candidate(rankings[mode])));
-        }
-
-        function isPvpFrame(frame){
-            const signature = `${frame.topic} ${frame.event}`.toLowerCase();
-            const isPlayerFrame = /^player:\d+$/i.test(String(frame.topic || ""));
-            const isResultPagePlayerFrame = isPlayerFrame && location.hash.toLowerCase().includes("/pvpresult");
-            const isRankingPlayerFrame = isPlayerFrame && hasRankingArrays(frame.payload);
-            return signature.includes("pvp")
-                || isRankingPlayerFrame
-                // 官方結果頁會對 player channel 發出 medals 請求；不同版本的回覆可能是
-                // medals、phx_reply 或 update_data。只在 /pvpresult 時保存 player 封包，避免擴大成全站監聽。
-                || isResultPagePlayerFrame;
-        }
-
-        function summariseCandidate(frame){
-            const payload = frame.payload && typeof frame.payload === "object" && !Array.isArray(frame.payload) ? frame.payload : null;
-            return {
-                diagnosticOnly: true,
-                capturedAt: Date.now(),
-                topic: String(frame.topic || "").replace(/\d+/g, "#").slice(0, 80) || "(none)",
-                event: String(frame.event || "(none)").slice(0, 80),
-                payloadKeys: Object.keys(payload || {}).slice(0, 12),
-                pageHash: location.hash,
-            };
-        }
-
-        function publish(data, url){
-            const frame = decodeFrame(data);
-            stats.receivedMessageCount += 1;
-            const pvpFrame = isPvpFrame(frame);
-            const battlePage = location.hash.toLowerCase().includes("/pvpbattle");
-            if (!pvpFrame && !battlePage) return;
-            const entry = pvpFrame
-                ? { ...frame, capturedAt: Date.now(), socketUrl: url || "", pageHash: location.hash }
-                : summariseCandidate(frame);
-            if (pvpFrame) stats.forwardedFrameCount += 1;
-            else {
-                stats.candidateFrameCount += 1;
-                stats.lastCandidate = entry;
-            }
-            subscribers.forEach((listener) => {
-                try { listener(entry); } catch (error) { console.error("[LOADER] PVP Socket 訂閱者失敗：", error); }
-            });
-        }
-
-        function installObservedConstructor(){
-            const NativeWebSocket = window.WebSocket;
-            if (NativeWebSocket === ObservedWebSocket) return true;
-            if (typeof NativeWebSocket !== "function") {
-                console.warn("[LOADER] 無法安裝 PVP Socket 觀察器：WebSocket 不可用。");
-                return false;
-            }
-
-            function PassiveObservedWebSocket(url, protocols){
-                const socket = arguments.length > 1 ? new NativeWebSocket(url, protocols) : new NativeWebSocket(url);
-                stats.socketCount += 1;
-                // 僅加上一個 message listener；不修改事件內容、不阻擋事件，也不改變 socket 的傳送流程。
-                socket.addEventListener("message", (event) => publish(event.data, socket.url));
-                return socket;
-            }
-
-            PassiveObservedWebSocket.prototype = NativeWebSocket.prototype;
-            Object.setPrototypeOf(PassiveObservedWebSocket, NativeWebSocket);
-            ObservedWebSocket = PassiveObservedWebSocket;
-            window.WebSocket = ObservedWebSocket;
-            stats.reinstallCount += 1;
-            return true;
-        }
-
-        if (!installObservedConstructor()) return null;
-        const tap = {
-            subscribe(listener){
-                subscribers.add(listener);
-                return () => subscribers.delete(listener);
-            },
-            getStatus(){ return { ...stats, active: window.WebSocket === ObservedWebSocket }; },
-            ensure(){ return installObservedConstructor(); },
-        };
-        window.__RF_PVP_SOCKET_TAP__ = tap;
-        // 不使用輪詢或計時器。僅在瀏覽器實際將頁面帶回前景／從 bfcache 還原時，
-        // 再確認未來新建的官方 WebSocket 仍會被被動觀察。
-        const ensureAfterReturn = () => tap.ensure();
-        window.addEventListener("pageshow", ensureAfterReturn);
-        window.addEventListener("focus", ensureAfterReturn);
-        document.addEventListener("visibilitychange", () => {
-            if (!document.hidden) ensureAfterReturn();
-        });
-        console.log("[LOADER] PVP Socket 被動觀察器已預先安裝。");
-        return tap;
-    }
-
     function injectScript(tool){
-        if (!tool.src) return;
-        const s = document.createElement("script");
-        s.src = tool.src + "?v=" + Date.now();
-        s.async = false;
-        s.defer = true;
-        s.dataset.uwTool = tool.id;
-        document.head.appendChild(s);
-        console.log("[LOADER] 載入 JS：" + tool.id);
+        if (!tool.src) return Promise.resolve();
+        return new Promise((resolve) => {
+            const s = document.createElement("script");
+            s.src = tool.src + "?v=" + Date.now();
+            s.async = false;
+            s.dataset.uwTool = tool.id;
+            s.onload = () => {
+                console.log("[LOADER] 已載入 JS：" + tool.id);
+                resolve();
+            };
+            s.onerror = () => {
+                console.error("[LOADER] 載入 JS 失敗：" + tool.id + "（" + s.src + "）");
+                resolve();
+            };
+            document.head.appendChild(s);
+            console.log("[LOADER] 載入 JS：" + tool.id);
+        });
     }
 
     function injectStyle(tool){
@@ -288,13 +221,13 @@ console.log("[LOADER] 小工具載入器啟動");
         console.log("[LOADER] 載入 CSS：" + tool.id);
     }
 
-    function loadEnabledTools(){
+    async function loadEnabledTools(){
         const cfg = loadConfig();
-        TOOLS.forEach(tool => {
-            if (!isEnabled(tool, cfg)) return;
+        for (const tool of TOOLS) {
+            if (!isEnabled(tool, cfg)) continue;
             if (tool.css) injectStyle(tool);
-            if (tool.src) injectScript(tool);
-        });
+            if (tool.src) await injectScript(tool);
+        }
     }
 
     function buildPanel(){
@@ -357,7 +290,10 @@ console.log("[LOADER] 小工具載入器啟動");
                 const id = e.target.dataset.id;
                 const newCfg = loadConfig();
                 newCfg[id] = e.target.checked;
-                saveConfig(newCfg);
+                if (!saveConfig(newCfg)) {
+                    e.target.checked = !e.target.checked;
+                    alert("目前頁面禁止保存設定，請改用 http://localhost 開啟，或確認瀏覽器未封鎖本機儲存。");
+                }
             }
         });
 
@@ -394,10 +330,7 @@ console.log("[LOADER] 小工具載入器啟動");
         document.addEventListener("mouseup", function(){ dragging = false; });
     }
 
-    const initialConfig = loadConfig();
-    const pvpGuardTool = TOOLS.find(tool => tool.id === "排名戰重複配對攔截");
-    if (pvpGuardTool && isEnabled(pvpGuardTool, initialConfig)) installPvpSocketTap();
-    loadEnabledTools();
+    void loadEnabledTools();
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", buildPanel);
     } else {

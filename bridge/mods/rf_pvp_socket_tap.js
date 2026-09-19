@@ -49,11 +49,23 @@
     }
   }
 
+  function hasRankingArrays(payload) {
+    const value = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : null;
+    if (!value) return false;
+    const modes = ["1v1", "3v3", "5v5"];
+    const hasList = (item) => Array.isArray(item) || Boolean(item && typeof item === "object" && ["entries", "players", "ranking", "rankings", "list", "data"].some((key) => Array.isArray(item[key])));
+    const response = value.response && typeof value.response === "object" ? value.response : value;
+    if (modes.some((mode) => hasList(response[mode]))) return true;
+    const rankings = response.rankings || response.leaderboard || response.ranking;
+    return Boolean(rankings && typeof rankings === "object" && modes.some((mode) => hasList(rankings[mode])));
+  }
+
   function isPvpFrame(frame) {
     const signature = `${frame.topic} ${frame.event}`.toLowerCase();
-    const isResultPagePlayerFrame = /^player:\d+$/i.test(String(frame.topic || ""))
-      && location.hash.toLowerCase().includes("/pvpresult");
-    return signature.includes("pvp") || isResultPagePlayerFrame;
+    const isPlayerFrame = /^player:\d+$/i.test(String(frame.topic || ""));
+    const isResultPagePlayerFrame = isPlayerFrame && location.hash.toLowerCase().includes("/pvpresult");
+    const isRankingPlayerFrame = isPlayerFrame && hasRankingArrays(frame.payload);
+    return signature.includes("pvp") || isResultPagePlayerFrame || isRankingPlayerFrame;
   }
 
   function summariseCandidate(frame) {
