@@ -2,53 +2,15 @@
   "use strict";
 
   // 瀏覽器側 bridge client 內嵌於本守衛；Node localhost server 仍維持獨立檔案。
-  const DEFAULT_BRIDGE_ENDPOINT = "https://rf-pvp-analyzer-api.chengyen1209.workers.dev/api/pvp/capture";
+  const STARTUP_CONFIG = window.STARTUP_BRIDGE_CONFIG && typeof window.STARTUP_BRIDGE_CONFIG === "object"
+    ? window.STARTUP_BRIDGE_CONFIG : {};
+  const BRIDGE_ENDPOINT = STARTUP_CONFIG.endpoint || window.RF_PVP_BACKEND_ENDPOINT || "https://rfpvpanlyz-wgxynphd.manus.space/api/pvp/capture";
   const LOCAL_BRIDGE_ENDPOINT = "http://127.0.0.1:8787/v1/capture";
-  // 設定檔先於守衛載入。新版設定檔只提供一次性取用函式；守衛取用後立即移除它。
-  // 舊版設定檔仍可相容讀取，但也會在啟動時清除 window 上的明文密鑰。
-  function takePvpBackendConfig() {
-    const hasOwn = (key) => Object.prototype.hasOwnProperty.call(window, key);
-    const readText = (value) => typeof value === "string" ? value.trim() : "";
-    const clearLegacyWriteSecret = () => {
-      if (!hasOwn("RF_PVP_WRITE_SECRET")) return;
-      try { delete window.RF_PVP_WRITE_SECRET; } catch (_) { /* best effort */ }
-      if (hasOwn("RF_PVP_WRITE_SECRET")) {
-        try { window.RF_PVP_WRITE_SECRET = ""; } catch (_) { /* best effort */ }
-      }
-    };
-
-    const consume = window.__RF_PVP_CONSUME_BACKEND_CONFIG__;
-    if (typeof consume === "function") {
-      try {
-        const supplied = consume();
-        if (supplied && typeof supplied === "object") {
-          return {
-            loaded: true,
-            endpoint: readText(supplied.endpoint),
-            writeSecret: readText(supplied.writeSecret),
-          };
-        }
-      } catch (error) {
-        console.warn("[RF bridge] 無法讀取 PVP backend 設定：", error?.message || error);
-      } finally {
-        try { delete window.__RF_PVP_CONSUME_BACKEND_CONFIG__; } catch (_) { /* best effort */ }
-        clearLegacyWriteSecret();
-      }
-    }
-
-    const config = {
-      loaded: hasOwn("RF_PVP_BACKEND_ENDPOINT") || hasOwn("RF_PVP_WRITE_SECRET"),
-      endpoint: readText(window.RF_PVP_BACKEND_ENDPOINT),
-      writeSecret: readText(window.RF_PVP_WRITE_SECRET),
-    };
-    clearLegacyWriteSecret();
-    return config;
-  }
-  const STARTUP_BRIDGE_CONFIG = takePvpBackendConfig();
-  const BRIDGE_ENDPOINT = STARTUP_BRIDGE_CONFIG.endpoint || DEFAULT_BRIDGE_ENDPOINT;
-  const CONFIGURED_WRITE_SECRET = STARTUP_BRIDGE_CONFIG.writeSecret;
+  const RANKING_MODES = ["1v1", "3v3", "5v5"];
+  const RANKING_ENDPOINT = STARTUP_CONFIG.rankingEndpoint || window.RF_RANKING_ENDPOINT || "";
+  const RANKING_SECRET = STARTUP_CONFIG.rankingSecret || window.RF_RANKING_WRITE_SECRET || "";
   const BRIDGE_ALLOWED_KEYS = [
-    "battleAt", "mode", "outcome", "playerTeam", "opponentTeam", "playerName", "playerUnion", "playerId", "opponentName", "opponentUnion", "opponentPlayerId",
+    "battleAt", "mode", "outcome", "playerTeam", "opponentTeam", "playerName", "playerUnion", "opponentName", "opponentUnion",
     "rankBefore", "rankAfter", "scoreBefore", "scoreAfter", "notes",
     "sourceBattleChannel", "sourceBattleId",
   ];
@@ -64,6 +26,10 @@
   let bridgeConsecutiveFailures = 0;
   let bridgeHeartbeatTimer = null;
   let bridgeHeartbeatInFlight = false;
+  const rankingSentFingerprints = new Map();
+  let rankingLastSuccessAt = 0;
+  let rankingLastError = "";
+  let rankingSentCount = 0;
 
   function installEmbeddedBridgeClient() {
     if (window.RFLocalBridge?.sendMatch) return;
@@ -81,17 +47,6 @@
       if (endpoint.endsWith("/v1/capture")) return endpoint.slice(0, -"/v1/capture".length) + "/health";
       return endpoint.replace(/\/$/, "") + "/health";
     };
-    const getWriteSecretState = () => {
-      if (!STARTUP_BRIDGE_CONFIG.loaded) {
-        return "設定檔未載入或載入順序錯誤";
-      }
-      return CONFIGURED_WRITE_SECRET ? "已設定" : "設定檔已載入，但密鑰是空白或 placeholder";
-    };
-    const getWriteSecret = () => CONFIGURED_WRITE_SECRET;
-    const getWriteHeaders = () => {
-      const writeSecret = getWriteSecret();
-      return writeSecret ? { "X-RF-Write-Secret": writeSecret } : {};
-    };
     const setStatus = (status, message, error = "") => {
       bridgeStatus = status;
       bridgeStatusMessage = message;
@@ -104,24 +59,12 @@
     };
     const probeHealth = async () => {
       if (bridgeHeartbeatInFlight) return;
-      if (!getWriteSecret()) {
-        bridgeConsecutiveFailures += 1;
-        const writeSecretState = getWriteSecretState();
-        setStatus("reconnecting", `PVP 寫入密鑰：${writeSecretState}；請檢查 assets/mods/rf_pvp_backend_config.js`, "PVP_WRITE_SECRET not configured");
-        scheduleHeartbeat(BRIDGE_MAX_RETRY_MS);
-        return;
-      }
       bridgeHeartbeatInFlight = true;
       setStatus(bridgeConsecutiveFailures ? "reconnecting" : "connecting", bridgeConsecutiveFailures ? "重連中：正在確認網站後端" : "正在確認網站後端");
       const controller = new AbortController();
       const timeout = window.setTimeout(() => controller.abort(), BRIDGE_REQUEST_TIMEOUT_MS);
       try {
-        const response = await fetch(getHealthEndpoint(), {
-          method: "GET",
-          cache: "no-store",
-          headers: getWriteHeaders(),
-          signal: controller.signal,
-        });
+        const response = await fetch(getHealthEndpoint(), { method: "GET", cache: "no-store", signal: controller.signal });
         const result = await response.json().catch(() => ({}));
         if (!response.ok || result.ok !== true) throw new Error(result.error || `health HTTP ${response.status}`);
         bridgeLastHeartbeatAt = Date.now();
@@ -140,12 +83,36 @@
         if (typeof window.RF_PVP_Debug?.onBridgeStatus === "function") window.RF_PVP_Debug.onBridgeStatus();
       }
     };
-    const sendMatch = async (summary) => {
-      const endpoint = BRIDGE_ENDPOINT;
-      if (!getWriteSecret()) {
-        setStatus("reconnecting", `PVP 寫入密鑰：${getWriteSecretState()}；無法上傳戰績`, "PVP_WRITE_SECRET not configured");
-        throw new Error("PVP_WRITE_SECRET not configured");
+    const sendRankingSnapshot = async (snapshot) => {
+      const endpoint = STARTUP_CONFIG.rankingEndpoint || window.RF_RANKING_ENDPOINT || RANKING_ENDPOINT;
+      const secret = STARTUP_CONFIG.rankingSecret || window.RF_RANKING_WRITE_SECRET || RANKING_SECRET;
+      if (!endpoint) throw new Error("ranking endpoint not configured");
+      if (!secret) throw new Error("ranking write secret not configured");
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), BRIDGE_REQUEST_TIMEOUT_MS);
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-RF-Ranking-Secret": String(secret) },
+          body: JSON.stringify(snapshot),
+          signal: controller.signal,
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || result.ok !== true) throw new Error(result.error || `ranking HTTP ${response.status}`);
+        rankingLastSuccessAt = Date.now();
+        rankingLastError = "";
+        rankingSentCount += 1;
+        return result;
+      } catch (error) {
+        rankingLastError = error?.name === "AbortError" ? "ranking timeout" : String(error?.message || error).slice(0, 180);
+        throw error;
+      } finally {
+        window.clearTimeout(timeout);
       }
+    };
+
+    const sendMatch = async (summary) => {
+      const endpoint = window.RF_PVP_BACKEND_ENDPOINT || BRIDGE_ENDPOINT;
       const requestBody = { type: "match", workspaceId: summary.workspaceId, data: sanitize(summary) };
       if (!window.RF_PVP_BACKEND_ENDPOINT && endpoint === LOCAL_BRIDGE_ENDPOINT) delete requestBody.workspaceId;
       const controller = new AbortController();
@@ -156,7 +123,7 @@
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...getWriteHeaders(),
+            ...(window.RF_PVP_API_KEY ? { "X-RF-API-Key": String(window.RF_PVP_API_KEY) } : {}),
           },
           body: JSON.stringify(requestBody),
           signal: controller.signal,
@@ -179,7 +146,12 @@
       }
     };
     const getStatus = () => ({
-      endpoint: window.RF_PVP_BACKEND_ENDPOINT || BRIDGE_ENDPOINT,
+      endpoint: STARTUP_CONFIG.endpoint || window.RF_PVP_BACKEND_ENDPOINT || BRIDGE_ENDPOINT,
+      rankingEndpoint: STARTUP_CONFIG.rankingEndpoint || window.RF_RANKING_ENDPOINT || RANKING_ENDPOINT || null,
+      rankingConfigured: Boolean((STARTUP_CONFIG.rankingEndpoint || window.RF_RANKING_ENDPOINT || RANKING_ENDPOINT) && (STARTUP_CONFIG.rankingSecret || window.RF_RANKING_WRITE_SECRET || RANKING_SECRET)),
+      rankingLastSuccessAt: rankingLastSuccessAt || null,
+      rankingSentCount,
+      rankingLastError: rankingLastError || null,
       healthEndpoint: getHealthEndpoint(),
       status: bridgeStatus,
       message: bridgeStatusMessage,
@@ -187,9 +159,8 @@
       lastSuccessAt: bridgeLastSuccessAt || null,
       consecutiveFailures: bridgeConsecutiveFailures,
       lastError: bridgeLastError || null,
-      writeSecretState: getWriteSecretState(),
     });
-    window.RFLocalBridge = Object.freeze({ sendMatch, probeHealth, getStatus, endpoint: BRIDGE_ENDPOINT });
+    window.RFLocalBridge = Object.freeze({ sendMatch, sendRankingSnapshot, probeHealth, getStatus, endpoint: BRIDGE_ENDPOINT });
     console.log(`[RF bridge] embedded client ready; status=connecting; endpoint=${BRIDGE_ENDPOINT}`);
     void probeHealth();
   }
@@ -205,7 +176,6 @@
   const MAX_EVENTS = 160;
   const ACTIVE_BATTLE_EVENT_LIMIT = 96;
   const ACTIVE_BATTLE_TTL_MS = 10 * 60 * 1000;
-  const MAX_ARCHIVE_CHARS = 1_500_000;
 
   if (window.__RF_PVP_DOUBLE_MATCH_GUARD_V8__) {
     console.warn(`[${MOD_NAME}] 已載入，略過重複安裝。`);
@@ -218,7 +188,7 @@
   let currentBattleChannel = null;
   let uiPanel = null;
   let transportAttached = false;
-  let transportMessage = "等待 PVP Socket 被動觀察器 mod";
+  let transportMessage = "等待載入器預先安裝 Socket 觀察器";
   let subscribedTransportTap = null;
   let unsubscribeTransport = null;
   let capturedSinceLoad = 0;
@@ -228,8 +198,6 @@
   let identityRoot = null;
   let identityDebounce = null;
   const activeBattleEvents = new Map();
-  // 身份 DOM 可能在 medals 回覆前卸載；按戰鬥 channel 保存最後一次完整快照，避免只依賴目前畫面。
-  const battleIdentityByChannel = new Map();
 
   function readArray(key) {
     try {
@@ -247,38 +215,6 @@
       return true;
     } catch (error) {
       console.error(`[${MOD_NAME}] 無法儲存 ${key}：`, error);
-      return false;
-    }
-  }
-
-  // localStorage 只保存聚合戰績需要的欄位；完整 rawFrame 不應進入瀏覽器快取。
-  function compactArchivePayload(payload, event, topic) {
-    const source = asObject(payload) || {};
-    const output = {};
-    const copy = (key) => { if (source[key] !== undefined) output[key] = redactAndClone(source[key]); };
-    for (const key of ["status", "channel", "id", "battle_id", "battle_type", "next_action", "error", "response", "offender", "defender", "round"]) copy(key);
-    if (/^player:\\d+$/i.test(String(topic || ""))) {
-      for (const key of ["1v1", "3v3", "5v5", "medals", "previous_record"]) copy(key);
-    }
-    return Object.keys(output).length ? output : redactAndClone(source);
-  }
-
-  function writeEventArchive(events) {
-    let kept = Array.isArray(events) ? events.slice() : [];
-    while (kept.length && JSON.stringify(kept).length > MAX_ARCHIVE_CHARS) kept.splice(0, Math.max(1, Math.ceil(kept.length / 10)));
-    while (kept.length) {
-      try {
-        localStorage.setItem(EVENT_KEY, JSON.stringify(kept));
-        return true;
-      } catch (error) {
-        kept.splice(0, Math.max(1, Math.ceil(kept.length / 10)));
-      }
-    }
-    try {
-      localStorage.removeItem(EVENT_KEY);
-      return true;
-    } catch (error) {
-      console.warn(`[${MOD_NAME}] 無法清理 ${EVENT_KEY}：`, error);
       return false;
     }
   }
@@ -360,13 +296,91 @@
     console.warn(`[${MOD_NAME}] 攔截到異常:`, entry);
   }
 
+  function isRankingMode(value) { return RANKING_MODES.includes(String(value || "").toLowerCase()); }
+
+  function rankingArrayCandidate(value) {
+    if (Array.isArray(value)) return value;
+    const object = asObject(value);
+    if (!object) return null;
+    for (const key of ["entries", "players", "ranking", "rankings", "list", "data"]) {
+      if (Array.isArray(object[key])) return object[key];
+    }
+    return null;
+  }
+
+  function hasRankingArrays(payload) {
+    const response = unwrapPhoenixResponse(payload);
+    if (!response) return false;
+    if (RANKING_MODES.some((mode) => rankingArrayCandidate(response[mode]))) return true;
+    const rankings = asObject(response.rankings || response.leaderboard || response.ranking);
+    return Boolean(rankings && RANKING_MODES.some((mode) => rankingArrayCandidate(rankings[mode])));
+  }
+
+  function cleanRankingEntry(raw, fallbackRank) {
+    const entry = asObject(raw);
+    if (!entry) return null;
+    const id = firstValue(entry, ["id", "playerId", "player_id", "user_id", "uid"]);
+    const name = firstValue(entry, ["name", "nickname", "playerName", "player_name", "username"]);
+    const organization = firstValue(entry, ["organization", "union", "guild", "unionName", "union_name"]);
+    const rankValue = firstValue(entry, ["rank", "ranking", "position", "no"]);
+    const score = firstValue(entry, ["score", "rating", "points", "point"]);
+    const rank = Number(rankValue) > 0 ? Number(rankValue) : fallbackRank;
+    const clean = {
+      id: id === undefined || id === null ? "" : String(id).trim().slice(0, 80),
+      name: name === undefined || name === null ? "" : String(name).trim().slice(0, 120),
+      organization: organization === undefined || organization === null ? "" : String(organization).trim().slice(0, 120),
+      rank,
+      score: Number.isFinite(Number(score)) ? Number(score) : null,
+    };
+    return clean.id || clean.name ? clean : null;
+  }
+
+  function extractRankingModes(payload) {
+    const response = unwrapPhoenixResponse(payload);
+    if (!response) return {};
+    const containers = [response, asObject(response.rankings), asObject(response.leaderboard), asObject(response.ranking)].filter(Boolean);
+    const modes = {};
+    for (const mode of RANKING_MODES) {
+      for (const container of containers) {
+        const candidate = rankingArrayCandidate(container[mode]);
+        if (!candidate) continue;
+        const entries = candidate.map((item, index) => cleanRankingEntry(item, index + 1)).filter(Boolean);
+        if (entries.length) { modes[mode] = entries.slice(0, 5000); break; }
+      }
+    }
+    return modes;
+  }
+
+  function isRankingFrame(event, payload, topic) {
+    return /^player:\d+$/i.test(String(topic || "")) && hasRankingArrays(payload);
+  }
+
+  function sendRankingSnapshot(payload, topic, capturedAt) {
+    const send = window.RFLocalBridge?.sendRankingSnapshot;
+    if (typeof send !== "function") return;
+    const modes = extractRankingModes(payload);
+    if (!Object.keys(modes).length) return;
+    const fingerprint = JSON.stringify(modes);
+    const previous = rankingSentFingerprints.get(String(topic));
+    if (previous === fingerprint) return;
+    rankingSentFingerprints.set(String(topic), fingerprint);
+    const snapshot = { capturedAt: Number(capturedAt || Date.now()), modes };
+    Promise.resolve(send(snapshot)).then((result) => {
+      console.log(`[${MOD_NAME}] 已轉送排行榜快照：${Object.keys(modes).join(", ")}`, result);
+    }).catch((error) => {
+      rankingSentFingerprints.delete(String(topic));
+      console.warn(`[${MOD_NAME}] 排行榜快照未送達：`, error?.message || error);
+    });
+  }
+
   function isRelevantPvpEvent(event, payload, topic) {
     const name = String(event || "").toLowerCase();
     const channel = String(topic || "").toLowerCase();
     const response = unwrapPhoenixResponse(payload);
+    if (isRankingFrame(event, payload, topic)) return true;
     if (channel.includes("pvp")) return true;
     if (name.includes("pvp")) return true;
-    if (/^player:\d+$/i.test(channel) && (asObject(response?.medals) || (Array.isArray(response?.medals) && response.medals.length > 0))) return true;
+    if (/^player:\d+$/i.test(channel) && asObject(response?.medals)) return true;
     // 載入器僅在官方結果頁才轉送 player channel 全部回覆；完整保留以取得版本差異下的 medals 回覆包裝。
     if (/^player:\d+$/i.test(channel) && location.hash.toLowerCase().includes("/pvpresult")) return true;
     if (["battle_result", "team_confirmed", "surrender"].includes(name)) {
@@ -423,6 +437,10 @@
 
   /** 保留實際收到的 PVP 封包；不從畫面或 React state 推測資料。 */
   function capturePvpEvent(event, payload, topic, source = "channel", rawFrame) {
+    if (isRankingFrame(event, payload, topic)) {
+      sendRankingSnapshot(payload, topic, Date.now());
+      return;
+    }
     if (!isRelevantPvpEvent(event, payload, topic)) return;
     observePvpState(event, payload, topic);
     const capturedEvent = {
@@ -430,16 +448,17 @@
       capturedAtIso: new Date().toISOString(),
       event: String(event),
       topic: typeof topic === "string" ? topic : undefined,
-      payload: compactArchivePayload(payload, event, topic),
+      payload: redactAndClone(payload),
       source,
       ...(location.hash ? { capturedPath: location.hash } : {}),
+      rawFrame: rawFrame === undefined ? undefined : redactAndClone(rawFrame),
     };
     addToActiveBattleBuffer(capturedEvent, event, payload, topic);
     const events = readArray(EVENT_KEY);
     events.push(capturedEvent);
     const evicted = Math.max(0, events.length - MAX_EVENTS);
     if (evicted) events.splice(0, evicted);
-    writeEventArchive(events);
+    writeArray(EVENT_KEY, events);
     const stats = readCaptureStats();
     const payloadObject = asObject(payload);
     stats.totalCaptured += 1;
@@ -481,26 +500,11 @@
     if (!root?.querySelectorAll) return "";
     const nodes = [];
     if (root.nodeType === 1 && hasClassPrefix(root, prefix)) nodes.push(root);
-    // CSS Modules 的 class 可能是 AniDoor_leftTitle2__hash，也可能在不同建置中改成其他後綴；
-    // 同時使用 class prefix 與 class substring，避免只因 hash／分隔符差異而漏抓。
+    // AniDoor title2 的實際節點可能是 div、span 或 React 產生的其他元素；
+    // 只掃目前戰鬥 root，並由 debounce 控制頻率，避免全頁高頻查詢。
     nodes.push(...root.querySelectorAll("*"));
-    const element = nodes.find((node) => hasClassPrefix(node, prefix) || String(node.className || "").split(/\s+/).some((name) => name.includes(prefix.replace(/_$/, ""))));
+    const element = nodes.find((node) => hasClassPrefix(node, prefix));
     return element?.textContent?.trim().replace(/\s+/g, " ").slice(0, 120) || "";
-  }
-
-  function rememberBattleIdentity(channel = currentBattleChannel) {
-    if (!channel || !isBattleChannel(channel)) return;
-    const snapshot = Object.fromEntries(Object.entries(currentBattleIdentity).filter(([, value]) => typeof value === "string" && value.trim()).map(([key, value]) => [key, value.trim().slice(0, 120)]));
-    if (Object.keys(snapshot).length) battleIdentityByChannel.set(String(channel), snapshot);
-  }
-
-  function identityForBattle(channel) {
-    const channelKey = String(channel || "");
-    const saved = battleIdentityByChannel.get(channelKey) || {};
-    const current = channelKey === String(currentBattleChannel || "")
-      ? Object.fromEntries(Object.entries(currentBattleIdentity).filter(([, value]) => typeof value === "string" && value.trim()))
-      : {};
-    return { ...saved, ...current };
   }
 
   function readBattleIdentity(root = identityRoot || document) {
@@ -508,7 +512,6 @@
     const changed = Object.keys(ANI_IDENTITY_PREFIXES).some((key) => next[key] !== currentBattleIdentity[key]);
     if (!changed || (!next.playerName && !next.opponentName)) return false;
     currentBattleIdentity = { ...currentBattleIdentity, ...next };
-    rememberBattleIdentity();
     console.log(`[${MOD_NAME}] 已擷取 AniDoor 身份：`, currentBattleIdentity);
     updateUIPanel();
     forwardNewRecordsToBridge(uniqueAnalyzerRecords(analyzerEventPool(readArray(EVENT_KEY))));
@@ -560,7 +563,6 @@
     if (isMatchFrame && status === "matched" && isBattleChannel(payload?.channel)) {
       isMatching = false;
       currentBattleChannel = payload.channel;
-      rememberBattleIdentity(currentBattleChannel);
     }
     if (isMatchFrame && (status === "error" || status === "can_join" || payload?.error)) {
       isMatching = false;
@@ -701,110 +703,16 @@
     return Boolean(warriors && Object.keys(warriors).length > 0);
   }
 
-  function extractSurrenderUserId(value, depth = 0) {
-    if (depth > 5 || value === null || value === undefined) return undefined;
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        const found = extractSurrenderUserId(item, depth + 1);
-        if (found !== undefined) return found;
-      }
-      return undefined;
-    }
-    const object = asObject(value);
-    if (!object) return undefined;
-    for (const key of ["surrender_user_id", "surrendered_user_id", "forfeit_user_id", "surrenderUserId", "surrenderedUserId"]) {
-      const found = normalisePositiveInt(object[key]);
-      if (found !== undefined) return String(found);
-    }
-    for (const key of ["response", "payload", "data", "result", "battle_result", "battle", "state", "round", "medals", "previous_record"]) {
-      const found = extractSurrenderUserId(object[key], depth + 1);
-      if (found !== undefined) return found;
-    }
-    // 部分 Phoenix 回覆不固定包裝名稱；在有限深度內檢查其他物件欄位，
-    // 避免 surrender_user_id 被放在未知的結果節點而遺失。
-    for (const [key, child] of Object.entries(object)) {
-      if (["response", "payload", "data", "result", "battle_result", "battle", "state", "round", "medals", "previous_record"].includes(key)) continue;
-      const found = extractSurrenderUserId(child, depth + 1);
-      if (found !== undefined) return found;
-    }
-    return undefined;
-  }
-
-  function hasSurrenderAction(value, depth = 0) {
-    if (depth > 5 || value === null || value === undefined) return false;
-    const text = typeof value === "string" ? value.trim().toLowerCase() : "";
-    if (["surrender", "forfeit", "resign", "resigned", "concede", "conceded"].includes(text)) return true;
-    if (Array.isArray(value)) return value.some((item) => hasSurrenderAction(item, depth + 1));
-    const object = asObject(value);
-    if (!object) return false;
-    const action = String(firstValue(object, ["next_action", "action", "event", "type", "status"]) || "").trim().toLowerCase();
-    if (["surrender", "forfeit", "resign", "resigned", "concede", "conceded"].includes(action)) return true;
-    const nestedKeys = ["response", "payload", "data", "result", "battle_result", "battle", "state", "round", "medals", "previous_record"];
-    if (nestedKeys.some((key) => hasSurrenderAction(object[key], depth + 1))) return true;
-    return Object.entries(object).some(([key, child]) => !nestedKeys.includes(key) && hasSurrenderAction(child, depth + 1));
-  }
-
-  function isSurrenderEvidence(capturedEvent) {
-    return hasSurrenderAction(capturedEvent?.event) || hasSurrenderAction(capturedEvent?.payload) || extractSurrenderUserId(capturedEvent?.payload) !== undefined;
-  }
-
-  function findLatestWarriorsSnapshot(battleEvents, atTime = Number.POSITIVE_INFINITY) {
-    for (let index = battleEvents.length - 1; index >= 0; index -= 1) {
-      const capturedEvent = battleEvents[index];
-      if (Number(capturedEvent?.capturedAt || 0) > atTime) continue;
-      const payload = unwrapPhoenixResponse(capturedEvent.payload);
-      const round = asObject(payload?.round);
-      if (hasWarriors(round?.warriors)) return { capturedEvent, payload };
-    }
-    return null;
-  }
-
-  function findTerminalBattleSnapshot(battleEvents, surrenderEvents = []) {
+  function findTerminalBattleSnapshot(battleEvents) {
     for (let index = battleEvents.length - 1; index >= 0; index -= 1) {
       const capturedEvent = battleEvents[index];
       const payload = unwrapPhoenixResponse(capturedEvent.payload);
       const round = asObject(payload?.round);
       if (String(payload?.next_action || "").toLowerCase() === "medals" && hasWarriors(round?.warriors)) {
-        return { capturedEvent, payload, terminalAction: "medals" };
+        return { capturedEvent, payload };
       }
     }
-
-    // 官方對手投降時，pvp channel 的成功回覆可能只有 surrender_user_id，
-    // 後續 player medals 才帶 score/rank；因此使用投降訊號作終局觸發器，
-    // 但仍必須找到同一 battle channel 在投降前收到的 warriors 快照。
-    const candidates = [...battleEvents, ...(Array.isArray(surrenderEvents) ? surrenderEvents : [])]
-      .filter(isSurrenderEvidence)
-      .sort((left, right) => Number(left?.capturedAt || 0) - Number(right?.capturedAt || 0));
-    const surrenderEvent = candidates[candidates.length - 1];
-    if (surrenderEvent) {
-      const surrenderAt = Number(surrenderEvent.capturedAt || Number.POSITIVE_INFINITY);
-      const warriorsSnapshot = findLatestWarriorsSnapshot(battleEvents, surrenderAt);
-      if (warriorsSnapshot) {
-        return {
-          ...warriorsSnapshot,
-          terminalAction: "surrender",
-          surrenderEvidence: redactAndClone(unwrapPhoenixResponse(surrenderEvent.payload)),
-        };
-      }
-    }
-
-    // 對手投降時，某些版本只被動收到 player:<id> 的 medals 結果，
-    // pvp_battle channel 的 surrender／medals 狀態不一定會被觀察器轉送。
-    // player medals 是官方結算證據，因此可用其抵達時間找回同場 warriors；
-    // 上傳仍會等 enrichRecordsWithPlayerMedals 寫入 resultEvidence。
-    const resultEvent = (Array.isArray(surrenderEvents) ? surrenderEvents : [])
-      .slice()
-      .sort((left, right) => Number(left?.capturedEvent?.capturedAt || 0) - Number(right?.capturedEvent?.capturedAt || 0))
-      .at(-1);
-    if (!resultEvent) return null;
-    const resultAt = Number(resultEvent.capturedEvent?.capturedAt || Number.POSITIVE_INFINITY);
-    const warriorsSnapshot = findLatestWarriorsSnapshot(battleEvents, resultAt);
-    if (!warriorsSnapshot) return null;
-    return {
-      ...warriorsSnapshot,
-      terminalAction: "player_medals",
-      resultEvidence: redactAndClone(resultEvent.response),
-    };
+    return null;
   }
 
   /**
@@ -819,13 +727,10 @@
         const nestedMedals = asObject(response?.medals);
         const hasTopLevelMode = Boolean(asObject(response?.["1v1"]) || asObject(response?.["3v3"]) || asObject(response?.["5v5"]));
         const hasNestedMode = Boolean(asObject(nestedMedals?.["1v1"]) || asObject(nestedMedals?.["3v3"]) || asObject(nestedMedals?.["5v5"]));
-        const hasMedalsArray = Array.isArray(response?.medals) && response.medals.length > 0;
         const hasPreviousRecord = Boolean(asObject(response?.previous_record) || asObject(nestedMedals?.previous_record));
         // 某些結果回覆只帶目前 medals 與 score/rank，不帶 previous_record；仍可保存戰績，
         // 但 extractMedalsMetrics 會在缺少前值時保留 unknown／缺少的變化欄位，不做推測。
-        // 投降結算的另一種官方格式只有非空 medals 陣列；它仍是官方結算證據，
-        // 因此允許建立 unknown 結果，不能因沒有模式物件而整包丟掉。
-        const hasCurrentResult = hasTopLevelMode || hasNestedMode || hasMedalsArray;
+        const hasCurrentResult = hasTopLevelMode || hasNestedMode;
         if (!/^player:\d+$/i.test(String(capturedEvent?.topic || "")) || !hasCurrentResult) return null;
         return { capturedEvent, response };
       })
@@ -841,12 +746,11 @@
   function extractMedalsMetrics(response, mode) {
     const nestedMedals = asObject(response?.medals);
     const current = asObject(response?.[mode]) || asObject(nestedMedals?.[mode]);
-    const medalsArrayEvidence = Array.isArray(response?.medals) && response.medals.length > 0;
     const previous = asObject(asObject(response?.previous_record)?.[mode]) || asObject(asObject(nestedMedals?.previous_record)?.[mode]);
-    if (!current && !medalsArrayEvidence) return null;
-    const scoreAfter = normaliseNonNegativeInt(current?.score);
+    if (!current) return null;
+    const scoreAfter = normaliseNonNegativeInt(current.score);
     const scoreBefore = normaliseNonNegativeInt(previous?.score);
-    const rankAfter = normalisePositiveInt(current?.rank);
+    const rankAfter = normalisePositiveInt(current.rank);
     const rankBefore = normalisePositiveInt(previous?.rank);
     const scoreChange = scoreAfter !== undefined && scoreBefore !== undefined ? scoreAfter - scoreBefore : undefined;
     const rankChange = rankAfter !== undefined && rankBefore !== undefined ? rankBefore - rankAfter : undefined;
@@ -891,10 +795,9 @@
         resultEvidence: "official_player_medals",
         sourceResultMedalsTopic: resultEvent.capturedEvent.topic,
         sourceResultMedalsCapturedAt: resultEvent.capturedEvent.capturedAtIso,
-        ...(identityForBattle(record.sourceBattleChannel).playerName ? { playerName: identityForBattle(record.sourceBattleChannel).playerName } : {}),
-        ...(identityForBattle(record.sourceBattleChannel).playerUnion ? { playerUnion: identityForBattle(record.sourceBattleChannel).playerUnion } : {}),
-        ...(identityForBattle(record.sourceBattleChannel).opponentName ? { opponentName: identityForBattle(record.sourceBattleChannel).opponentName } : {}),
-        ...(identityForBattle(record.sourceBattleChannel).opponentUnion ? { opponentUnion: identityForBattle(record.sourceBattleChannel).opponentUnion } : {}),
+        ...(currentBattleIdentity.playerName ? { playerName: currentBattleIdentity.playerName } : {}),
+        ...(currentBattleIdentity.playerUnion ? { playerUnion: currentBattleIdentity.playerUnion } : {}),
+        ...(currentBattleIdentity.opponentUnion ? { opponentUnion: currentBattleIdentity.opponentUnion } : {}),
         rawEvent: {
           ...record.rawEvent,
           resultMedals: redactAndClone(resultEvent.response),
@@ -905,9 +808,8 @@
 
   /**
    * 真實 PVP 協定會將配對、玩家身分、戰鬥狀態與最終角色快照分散在多個訊框。
-   * 僅在 player:<id> 的 matched 訊框、該戰鬥的雙方初始狀態、同場 warriors 快照，
-   * 以及 player medals 終局結果都存在時建立紀錄。投降只作為終局觸發器，
-   * 勝負與排名仍只由官方 medals 的 score/rank 變化決定。
+   * 僅在 player:<id> 的 matched 訊框、該戰鬥的雙方初始狀態，以及 medals 終局快照
+   * 都存在時建立紀錄。勝負與排名不會從血量、獎牌動畫或畫面推測。
    */
   function aggregatePvpBattleRecords(events) {
     const matchedByChannel = new Map();
@@ -939,8 +841,7 @@
     for (const [channel, matched] of matchedByChannel.entries()) {
       const battleEvents = eventsByChannel.get(channel) || [];
       const initial = findInitialBattleSnapshot(battleEvents);
-      const playerMedalsEvents = findPlayerMedalsEvents(events, matched.playerUserId);
-      const terminal = findTerminalBattleSnapshot(battleEvents, playerMedalsEvents);
+      const terminal = findTerminalBattleSnapshot(battleEvents);
       if (!initial || !terminal) continue;
 
       const offender = asObject(initial.payload.offender);
@@ -957,7 +858,6 @@
       const player = iamDefender ? defender : offender;
       const opponent = iamDefender ? offender : defender;
       const battleId = firstValue(initial.payload, ["id", "battle_id"]) || channel.split(":")[1];
-      const battleIdentity = identityForBattle(channel);
       records.push({
         battleAt: Number(matched.capturedEvent.capturedAt || initial.capturedEvent.capturedAt || Date.now()),
         mode,
@@ -965,21 +865,18 @@
         playerTeam,
         opponentTeam,
         ...(typeof player?.name === "string" && player.name.trim() ? { playerName: player.name.trim() } : {}),
-        ...(player?.user_id !== undefined && player?.user_id !== null ? { playerId: String(player.user_id).trim() } : {}),
         ...(typeof opponent?.name === "string" && opponent.name.trim() ? { opponentName: opponent.name.trim() } : {}),
-        ...(opponent?.user_id !== undefined && opponent?.user_id !== null ? { opponentPlayerId: String(opponent.user_id).trim() } : {}),
-        ...(battleIdentity.playerName ? { playerName: battleIdentity.playerName } : {}),
-        ...(battleIdentity.playerUnion ? { playerUnion: battleIdentity.playerUnion } : {}),
-        ...(battleIdentity.opponentName ? { opponentName: battleIdentity.opponentName } : {}),
-        ...(battleIdentity.opponentUnion ? { opponentUnion: battleIdentity.opponentUnion } : {}),
+        ...(currentBattleIdentity.playerName ? { playerName: currentBattleIdentity.playerName } : {}),
+        ...(currentBattleIdentity.playerUnion ? { playerUnion: currentBattleIdentity.playerUnion } : {}),
+        ...(currentBattleIdentity.opponentName ? { opponentName: currentBattleIdentity.opponentName } : {}),
+        ...(currentBattleIdentity.opponentUnion ? { opponentUnion: currentBattleIdentity.opponentUnion } : {}),
         sourceBattleChannel: channel,
         sourceBattleId: battleId,
         sourcePlayerTopic: matched.capturedEvent.topic,
         sourcePlayerUserId: matched.playerUserId,
         playerSide: iamDefender ? "defender" : "offender",
-        terminalAction: terminal.terminalAction || "medals",
+        terminalAction: "medals",
         sourceEventCount: battleEvents.length,
-        ...(terminal.resultEvidence ? { resultEvidencePending: true } : {}),
         sourceEvents: battleEvents.map((event) => ({
           capturedAt: event.capturedAt,
           capturedAtIso: event.capturedAtIso,
@@ -990,8 +887,6 @@
           matched: matched.payload,
           initial: initial.payload,
           terminal: terminal.payload,
-          ...(terminal.surrenderEvidence ? { surrender: terminal.surrenderEvidence } : {}),
-          ...(terminal.resultEvidence ? { resultMedals: terminal.resultEvidence } : {}),
           player: player ? redactAndClone(player) : undefined,
           opponent: opponent ? redactAndClone(opponent) : undefined,
         },
@@ -1040,10 +935,8 @@
       workspaceId: String(record.sourcePlayerUserId || "").slice(0, 80),
       ...(typeof record.playerName === "string" ? { playerName: record.playerName.slice(0, 120) } : {}),
       ...(typeof record.playerUnion === "string" ? { playerUnion: record.playerUnion.slice(0, 120) } : {}),
-      ...(typeof record.playerId === "string" && /^\d{1,40}$/.test(record.playerId) ? { playerId: record.playerId } : {}),
       ...(typeof record.opponentName === "string" ? { opponentName: record.opponentName.slice(0, 120) } : {}),
       ...(typeof record.opponentUnion === "string" ? { opponentUnion: record.opponentUnion.slice(0, 120) } : {}),
-      ...(typeof record.opponentPlayerId === "string" && /^\d{1,40}$/.test(record.opponentPlayerId) ? { opponentPlayerId: record.opponentPlayerId } : {}),
       ...(Number.isInteger(record.rankBefore) && record.rankBefore >= 0 ? { rankBefore: record.rankBefore } : {}),
       ...(Number.isInteger(record.rankAfter) && record.rankAfter >= 0 ? { rankAfter: record.rankAfter } : {}),
       ...(Number.isInteger(record.scoreBefore) && record.scoreBefore >= 0 ? { scoreBefore: record.scoreBefore } : {}),
@@ -1060,7 +953,7 @@
       if (record.resultEvidence !== "official_player_medals") continue;
       const key = String(record.sourceBattleChannel || record.sourceBattleId || `${record.battleAt}:${record.mode}`);
       const summary = bridgeSummary(record);
-      const identitySignature = [summary.playerName, summary.playerUnion, summary.playerId, summary.opponentName, summary.opponentUnion, summary.opponentPlayerId].join("|");
+      const identitySignature = [summary.playerName, summary.playerUnion, summary.opponentName, summary.opponentUnion].join("|");
       if (bridgeSentKeys.get(key) === identitySignature) continue;
       if (!summary.playerTeam.length || !summary.opponentTeam.length) continue;
       bridgeSentKeys.set(key, identitySignature);
@@ -1076,7 +969,7 @@
   function attachTransportTap(reason = "initial") {
     const tap = window.__RF_PVP_SOCKET_TAP__;
     if (!tap || typeof tap.subscribe !== "function") {
-      transportMessage = "未偵測到 PVP Socket 被動觀察器 mod；請確認已啟用並完整重新整理";
+      transportMessage = "未偵測到預先安裝的 Socket 觀察器；請更新載入器並完整重新整理";
       transportAttached = false;
       console.warn(`[${MOD_NAME}] ${transportMessage}`);
       updateUIPanel();
@@ -1179,23 +1072,10 @@
       body.style.display = isMinimised ? "block" : "none";
       document.getElementById("rf-pvp-min-btn").innerText = isMinimised ? "[－]" : "[＋]";
     };
-    const getSafeBridgeDiagnostics = () => {
-      const bridge = window.RFLocalBridge?.getStatus?.() || {};
-      return {
-        status: bridge.status || "unavailable",
-        message: bridge.message || "未安裝 bridge client",
-        writeSecretState: bridge.writeSecretState || "未知",
-        lastHeartbeatAt: bridge.lastHeartbeatAt || null,
-        lastSuccessAt: bridge.lastSuccessAt || null,
-        consecutiveFailures: Number(bridge.consecutiveFailures || 0),
-        lastError: bridge.lastError || null,
-      };
-    };
     document.getElementById("rf-pvp-copy-btn").onclick = async () => {
       const diagnostics = {
         guardVersion: 16,
         transport: window.__RF_PVP_SOCKET_TAP__?.getStatus?.() || { attached: false, message: transportMessage },
-        bridge: getSafeBridgeDiagnostics(),
         captureStats: readCaptureStats(),
         capturedSinceLoad,
         recognisedMatchCount: uniqueAnalyzerRecords(analyzerEventPool(readArray(EVENT_KEY))).length,
@@ -1273,24 +1153,7 @@
     getLogs: () => readArray(LOG_KEY),
     getCapturedEvents: () => readArray(EVENT_KEY),
     getAnalyzerRecords: () => uniqueAnalyzerRecords(analyzerEventPool(readArray(EVENT_KEY))),
-    getCaptureDiagnostics: () => ({
-      guardVersion: 16,
-      captureStats: readCaptureStats(),
-      capturedSinceLoad,
-      transport: window.__RF_PVP_SOCKET_TAP__?.getStatus?.() || null,
-      bridge: (() => {
-        const bridge = window.RFLocalBridge?.getStatus?.() || {};
-        return {
-          status: bridge.status || "unavailable",
-          message: bridge.message || "未安裝 bridge client",
-          writeSecretState: bridge.writeSecretState || "未知",
-          lastHeartbeatAt: bridge.lastHeartbeatAt || null,
-          lastSuccessAt: bridge.lastSuccessAt || null,
-          consecutiveFailures: Number(bridge.consecutiveFailures || 0),
-          lastError: bridge.lastError || null,
-        };
-      })(),
-    }),
+    getCaptureDiagnostics: () => ({ captureStats: readCaptureStats(), capturedSinceLoad, transport: window.__RF_PVP_SOCKET_TAP__?.getStatus?.() || null }),
     clearCapturedEvents: () => writeArray(EVENT_KEY, []),
       getTransportStatus: () => window.__RF_PVP_SOCKET_TAP__?.getStatus?.() || { attached: false, message: transportMessage },
     getBridgeStatus: () => window.RFLocalBridge?.getStatus?.() || { status: "unavailable", message: "未安裝 bridge client" },
@@ -1307,5 +1170,5 @@
   if (document.readyState === "complete") createUIPanel();
   else window.addEventListener("load", createUIPanel, { once: true });
   attachTransportTap();
-  console.log(`[${MOD_NAME}] v16 已載入；會安全顯示寫入密鑰為未載入、空白或已設定，且 health heartbeat 與戰績上傳都使用同一組密鑰。僅被動保存 PVP 封包及安全分類摘要，不會攔截 Phoenix 或改寫官方訊框。`);
+  console.log(`[${MOD_NAME}] v16 已載入；PVP 戰績與 1v1／3v3／5v5 排行榜快照均以被動 Socket 觀察轉送，不會攔截 Phoenix 或改寫官方訊框。`);
 })();
