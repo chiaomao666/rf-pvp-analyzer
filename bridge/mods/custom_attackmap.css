@@ -1,0 +1,167 @@
+/**
+ * 自定義樣式補丁 (Custom Styles Patch)
+ * 目的：在原始版本 CSS 基礎上覆蓋專屬的視覺效果。
+ */
+
+
+/* 將時間/分數移到旗幟容器中央 */
+.Attackmap_nation_battle_close_roll_call_at__EmSiH {
+    position: absolute !important;
+    left: 8% !important;
+    /* 調整此數值（如 60% 到 70%）來改變上下位置 */
+    top: 40% !important; 
+    transform: translate(-50%, -50%) !important;
+    -webkit-transform: translate(-50%, -50%) !important;
+    
+    /* 調整字體大小，避免過大擠壓空間 */
+    font-size: clamp(1.5rem, 4vh, 2.5rem) !important;
+    
+    /* 確保文字在最上層 */
+    z-index: 10 !important;
+    
+    /* 保持您喜歡的視覺風格 */
+    font-family: var(--font_text_figures) !important;
+    font-weight: 700 !important;
+    color: #fff !important;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.8) !important;
+    background: rgba(0,0,0,0.6) !important;
+    padding: 2px 10px !important;
+    border-radius: 6px !important;
+    white-space: nowrap !important;
+}
+
+/* ===== 城鎮標記點擊範圍修正  2026-08-19（第二版）=====
+ *
+ * 症狀：點城鎮常常沒反應，右側面板停在前一座城；有雙刀的城特別難點中。
+ *
+ * 原因（實測幾何，詳見 README_MARKER_HITBOX.txt）：
+ *   Leaflet 的 DivIcon 預設 iconSize 是 [12, 12]，而遊戲呼叫 divIcon({html:...})
+ *   沒有傳 iconSize，所以 .leaflet-marker-icon 就是 12×12 px。
+ *   下面的 markerCityBox 覆寫把盒子設成 100%×100%，也就是那 12px；
+ *   而點擊感應區用的是百分比，基準正是這個盒子，
+ *   於是「擴大 3 倍」的 300% 實際只有 36px。
+ *
+ *   以 1600×900 畫面（min(57vw,100vh) = 900px）為例：
+ *       官方原版    盒子 112px → 感應區 100% = 112px
+ *       舊覆寫      盒子  12px → 感應區 300% =  36px   ← 比官方還小 3 倍
+ *       看到的圖示  markerCityBox_inline = 225px（pointer-events:none，不可點）
+ *
+ *   也就是說 300% 不是放大，是在補償盒子被縮小 9 倍，而且補得不夠。
+ *   使用者看到 225px 的城鎮圖示，實際只有正中央 36px 可點，點偏就穿透到地圖，
+ *   面板自然停在前一座城。
+ *
+ * 【第一版修正走錯路，這裡記下來】
+ *   第一版把 markerCityBox 還原成官方尺寸（112px），感應區用 100%。
+ *   點擊確實修好了，但盒子同時是「視覺」的基準 ——
+ *   白色小方框不見了（它就是這個盒子的 background/border），雙刀位置也跟著跑掉。
+ *   視覺與命中範圍綁在同一個盒子上，動一個就會影響另一個。
+ *
+ * 【現在的做法：把視覺和命中範圍拆開】
+ *   - markerCityBox 完全維持原樣（12px、白底黑框、top/left 位移都不動）
+ *     → 白色小方框、雙刀位置、圖示位置全部跟以前一模一樣
+ *   - 感應區改成不用百分比，直接寫成官方的絕對尺寸 calc(min(57vw,100vh)*.125)
+ *     並以 left/top 50% + translate(-50%,-50%) 對齊盒子中心
+ *     → 命中範圍 = 官方的 112px，而且會跟著視窗大小走，不受盒子尺寸影響
+ *
+ * 注意：這些覆寫刻意留在工具層（custom_attackmap.css），沒有動 bundle 的
+ *   static/css/main.f4ae5b14.css，所以只有在小工具管理器開啟 custom_attackmap
+ *   時才會套用。
+ *
+ * 要調整命中範圍請只動下面感應區的 calc() 係數（.125 是官方值），
+ * 不要回頭去改 markerCityBox 的尺寸 —— 那會連帶動到視覺。
+ * 也不要把係數放大太多，官方的 .125 已經是不會讓相鄰城鎮重疊的上限。
+ */
+
+/* 視覺：維持原樣，不要動（白色小方框就是這裡的 background + border） */
+.Attackmap_markerCityBox__9SxDr {
+    height: calc(40vh*.0625) !important;
+    position: relative !important;
+    width: calc(30vw*.0625) !important;
+    top: 50% !important;
+    left: 25% !important;
+    height: 100% !important;
+    width: 100% !important;
+    border: 1px solid #000 !important;
+    background-color: white !important;
+}
+
+/* 命中範圍：用絕對尺寸，不跟著上面那個 12px 的盒子縮水 */
+.Attackmap_markerClickSensor__VAWI1 {
+    height: calc(min(57vw,100vh)*.125) !important;
+    width: calc(min(57vw,100vh)*.125) !important;
+    left: 50% !important;
+    top: 50% !important;
+    -webkit-transform: translate(-50%, -50%) !important;
+    transform: translate(-50%, -50%) !important;
+    position: absolute !important;
+}
+
+/* 4. 國家圖示與右側旗幟定位微調 */
+.Attackmap_nation_battle_nation_icon__CDZPd {
+    width: calc(5vw) !important;
+    left: 50% !important;
+    top: 45% !important;
+}
+
+/* 5. 城市標記名稱樣式調整 */
+.Attackmap_markerCityName__8GqTG {
+    bottom: 10% !important;
+    font-weight: 700 !important;
+}
+
+/* 雙刀圖示定位  2026-08-19
+ *
+ * 舊寫法是 top: -100%，但它沒有作用，原因是：
+ *   雙刀的父層是 markerCityName，這條規則把雙刀設成 position:absolute 之後，
+ *   markerCityName 就沒有任何 in-flow 子元素了，高度塌成 0。
+ *   而 top 的百分比是相對於父層高度算的，-100% × 0 = 0 —— 等於沒寫。
+ *   結果雙刀停在城名那一行的位置，也就是白色方框中心下方約 M*.1（900px 畫面約 90px）。
+ *
+ * 現在改成用視窗單位直接算，而且用 bottom 而不是 top。
+ *
+ * 【為什麼一定要用 bottom】
+ *   custom_attackmap.js 會在有雙刀的城鎮補回城鎮名稱（bundle 是二選一，有雙刀就不渲染名稱）。
+ *   名稱是 in-flow 文字，一旦補進去，markerCityName 的高度就從 0 變成一行文字的高度。
+ *   父層的「上緣」會因此往上移，但「下緣」被 bottom:10% 釘住不動。
+ *   所以用 top 定位的話，補上名稱之後雙刀會整個往上跳；用 bottom 就不受影響。
+ *
+ * 以 M = min(57vw,100vh) 表示：
+ *     城名那一行的下緣在方框中心下方     +M*.100   （inline 盒子半高 .125 − bottom:10% 的 .025）
+ *     雙刀自己的高度                      M*.0625  （見 bundle CSS）
+ *     要讓雙刀中心對齊方框中心，
+ *     雙刀下緣要落在方框中心下方 +M*.03125（雙刀半高）
+ *     合計 bottom = M*(0.100 − 0.03125) = M*0.06875
+ *
+ * 想微調位置就只改下面這個 0.06875：
+ *     數字變大（例如 0.10）→ 雙刀往上跑
+ *     數字變小（例如 0.04）→ 雙刀往下跑
+ *     0.09375 會讓雙刀底邊剛好落在方框頂邊（不遮住方框）
+ * 水平方向已經置中，不需要動。
+ */
+.Attackmap_marker2swords__g3aDl {
+    position: absolute !important;
+    left: 50% !important;
+    top: auto !important;
+    bottom: calc(min(57vw,100vh) * 0.06875) !important;
+    -webkit-transform: translate(-50%, 0) !important;
+    transform: translate(-50%, 0) !important;
+}
+
+/* 6. 戰鬥分數專用類別 (若 JS 中有注入此類別) */
+.battleScoreBox {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 20px 0;
+    flex: 1;
+}
+.battleScore {
+    font-family: var(--font_text_figures);
+    font-size: clamp(3rem, 8vh, 6rem);
+    font-weight: 700;
+    color: #fff;
+    background: rgba(0,0,0,0.6);
+    padding: 10px 20px;
+    border-radius: 10px;
+    border: 2px solid rgb(0, 0, 0)
+}

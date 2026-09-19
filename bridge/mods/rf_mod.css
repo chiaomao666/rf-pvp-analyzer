@@ -1,0 +1,78 @@
+/* RF external behavior overrides */
+
+.rf-battle-score-box {
+    align-items: center;
+    display: flex;
+    justify-content: center;
+    margin: calc(min(57vw, 100vh) * 18 / 1600) 0;
+    min-height: calc(min(57vw, 100vh) * 64 / 1600);
+    width: 100%;
+}
+
+.rf-battle-score {
+    color: #fff;
+    font-family: Gelasio, "Noto Sans TC", sans-serif;
+    font-size: calc(min(57vw, 100vh) * 54 / 1600);
+    font-weight: 900;
+    letter-spacing: .08em;
+    line-height: 1;
+    text-shadow: 0 0 .35rem rgba(0, 0, 0, .9);
+    white-space: nowrap;
+}
+
+/*
+ * Selective animation reduction.
+ *
+ * Do not add a wildcard rule here. Modal enter/leave transitions, daily-login
+ * reward popups, navigator drawers and other Ant Design/game UI motion must
+ * remain controlled by the original application CSS/JS.
+ */
+html.rf-reduce-motion .Home_gear01__0Ja6h,
+html.rf-reduce-motion .Home_gear02__A2RBt,
+html.rf-reduce-motion .Home_gear03__E04Z0,
+html.rf-reduce-motion .Home_gear04__l9dRo,
+html.rf-reduce-motion .Home_gear05__1Ss8Z,
+html.rf-reduce-motion .Home_gear06__4oCgV,
+html.rf-reduce-motion .Home_gearImg__Oz5h1 {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+    will-change: auto !important;
+}
+
+/*
+ * PortalMap 九座 HQ 城市外圈、以及攻城地圖上 capital 標記外圈的旋轉光圈。
+ * 兩處都是遊戲的共用 .rotation_highlightCircle（global_rotation 動畫），
+ * 那個 class 同時也用在載入中、每日獎勵、PVP 確認鍵、大臣任命等地方，
+ * 所以只針對這兩個容器往下收斂，不要直接停掉 .rotation_highlightCircle 本身。
+ * 容器名稱用 [class*=] 前綴比對，避免寫死每次 build 都會變的 hash 尾碼。
+ */
+html.rf-reduce-motion [class*="PortalMap_sRing__"] .rotation_highlightCircle,
+html.rf-reduce-motion [class*="Attackmap_animatedRing__"] .rotation_highlightCircle {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+    will-change: auto !important;
+}
+
+html.rf-reduce-motion .Demos_clickSensorImg__jeie\+.rotation_highlightCircle {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+    will-change: auto !important;
+}
+
+/* Only the two character sprite renderers that were modified previously. */
+html.rf-reduce-motion .Character_spritesheet__1Y1GJ,
+html.rf-reduce-motion .Character_spritesheet__xFZcG {
+    animation: none !important;
+    background-position: 0 0 !important;
+    transition: none !important;
+    will-change: auto !important;
+}
+
+/* Hide only the corresponding continuously-rendered character effect layers. */
+html.rf-reduce-motion .Character_spritesheet_effect__5uhfo,
+html.rf-reduce-motion .Character_spritesheet_effect__fuJCl {
+    display: none !important;
+}

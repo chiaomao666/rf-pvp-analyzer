@@ -1,0 +1,138 @@
+/* city_reward_tracker.css - 獎勵領取狀態標示
+ *
+ * 只針對「地方援助」城鎮，HQ（中央援助）與世界之塔一類的番外城鎮不標。
+ *
+ * 三種狀態：
+ *   uw-reward-pending         未領取         金色呼吸光圈（搶眼）
+ *   uw-reward-collected       今日已領       暗綠實線細圈（備查）
+ *   uw-reward-collected-lost  今日已領但失守  暗綠虛線細圈（備查，可區分）
+ */
+
+/* ---- PortalMap ----
+ * marker 本體只有 min(57vw,100vh)*.00813（1600px 高時約 13px），
+ * 圈圈要畫得比它大好幾倍才看得到。
+ * pointer-events:none 才不會擋掉原本點進 attackmap 的點擊。
+ */
+div[class*="PortalMap_marker"].uw-reward-pending,
+div[class*="PortalMap_marker"].uw-reward-collected,
+div[class*="PortalMap_marker"].uw-reward-collected-lost {
+    z-index: 6 !important;
+}
+
+div[class*="PortalMap_marker"].uw-reward-pending::after,
+div[class*="PortalMap_marker"].uw-reward-collected::after,
+div[class*="PortalMap_marker"].uw-reward-collected-lost::after {
+    border-radius: 50%;
+    content: "";
+    left: 50%;
+    pointer-events: none;
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* 未領取：金色呼吸光圈 */
+div[class*="PortalMap_marker"].uw-reward-pending::after {
+    border: 2px solid #ffd766;
+    box-shadow: 0 0 7px 2px rgba(255, 199, 64, .8), inset 0 0 5px rgba(255, 199, 64, .45);
+    height: 340%;
+    width: 340%;
+    animation: uw-reward-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes uw-reward-pulse {
+    0%, 100% {
+        opacity: .45;
+        box-shadow: 0 0 5px 1px rgba(255, 199, 64, .55), inset 0 0 4px rgba(255, 199, 64, .3);
+    }
+
+    50% {
+        opacity: 1;
+        box-shadow: 0 0 11px 3px rgba(255, 199, 64, .95), inset 0 0 6px rgba(255, 199, 64, .55);
+    }
+}
+
+/* 今日已領（仍持有）：暗綠實線，靜態不搶視線 */
+div[class*="PortalMap_marker"].uw-reward-collected::after {
+    border: 1.5px solid #4f8f52;
+    box-shadow: 0 0 3px rgba(0, 0, 0, .8);
+    height: 250%;
+    opacity: .85;
+    width: 250%;
+}
+
+/* 今日已領（已失守）：同色但虛線，跟仍持有的區分得出來 */
+div[class*="PortalMap_marker"].uw-reward-collected-lost::after {
+    border: 1.5px dashed #4f8f52;
+    box-shadow: 0 0 3px rgba(0, 0, 0, .8);
+    height: 250%;
+    opacity: .7;
+    width: 250%;
+}
+
+/* 面板上的開關：關掉時整組隱藏，不用逐一移除 class */
+html.uw-reward-off-pending div[class*="PortalMap_marker"].uw-reward-pending::after {
+    display: none;
+}
+
+html.uw-reward-off-collected div[class*="PortalMap_marker"].uw-reward-collected::after,
+html.uw-reward-off-collected div[class*="PortalMap_marker"].uw-reward-collected-lost::after {
+    display: none;
+}
+
+/* ---- 城鎮詳細 ----
+ * 仍持有：標在「佔領者（控制聯盟）」那一列後面
+ * 已失守：那一列顯示的是對方聯盟，標在那裡會讀成對方領了，改標在城鎮名旁邊
+ */
+.uw-reward-tag {
+    display: inline;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: .62em;
+    font-weight: 400;
+    letter-spacing: .02em;
+    margin-left: .45em;
+    text-shadow: 0 0 .25rem rgba(0, 0, 0, .9);
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.uw-reward-tag[data-uw-collected="1"] {
+    color: #9aa38f;
+}
+
+.uw-reward-tag[data-uw-collected="0"] {
+    color: #ffd766;
+}
+
+.uw-reward-tag[data-uw-collected="lost"] {
+    color: #7fb682;
+}
+
+/* ---- 面板內容 ---- */
+#uw-panel--city_reward_tracker .uw-reward-stat {
+    color: #8b9284;
+    padding: 2px 0 6px;
+}
+
+#uw-panel--city_reward_tracker .uw-reward-stat b {
+    color: #d9a441;
+    font-size: 1.15em;
+}
+
+#uw-panel--city_reward_tracker .uw-reward-stat b.uw-reward-zero {
+    color: #6f9b5c;
+}
+
+#uw-panel--city_reward_tracker .uw-reward-substat {
+    color: #6f7669;
+    font-size: .92em;
+    margin-top: 2px;
+}
+
+#uw-panel--city_reward_tracker label {
+    align-items: center;
+    cursor: pointer;
+    display: flex;
+    gap: 8px;
+    padding: 4px 0;
+}

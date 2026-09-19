@@ -1,0 +1,131 @@
+/* rf_account_manager.css - 登入畫面「快速選擇帳號」面板的樣式
+ *
+ * 2026-08-19：從 rf_mod.css 抽出來。
+ *   這些規則原本放在 rf_mod.css，但 rf_mod 在 loader.js 的 TOOLS 裡是 enabled:false，
+ *   而 loader 只有在工具啟用時才注入它的 CSS ——
+ *   結果 rf_account_manager 雖然預設開啟，樣式卻沒被載入，面板是無樣式狀態。
+ *   現在樣式跟著 rf_account_manager 自己的開關走。
+ *
+ * 版面說明（rf_account_manager.js 的每頁筆數計算會讀這裡）：
+ *   .rf-account-list 是 2 欄 grid，760px 以下變 1 欄。
+ *   JS 用 getComputedStyle 讀 gridTemplateColumns 得到實際欄數，
+ *   再依視窗高度算得下幾列，兩者相乘就是每頁筆數。
+ *   所以改這裡的欄數或列高，JS 那邊會自動跟上，不需要同步改數字。
+ */
+
+.rf-account-manager {
+    color: #fff;
+    font-family: "Noto Sans TC", sans-serif;
+    margin-top: calc(min(57vw, 100vh) * 24 / 1600);
+    width: 100%;
+}
+
+.rf-account-toolbar {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: calc(min(57vw, 100vh) * 12 / 1600);
+}
+
+.rf-account-title {
+    font-size: calc(min(57vw, 100vh) * 42 / 1600);
+}
+
+.rf-account-remember {
+    align-items: center;
+    cursor: pointer;
+    display: inline-flex;
+    font-size: calc(min(57vw, 100vh) * 38 / 1600);
+    gap: .45rem;
+    white-space: nowrap;
+}
+
+.rf-account-remember input {
+    height: calc(min(57vw, 100vh) * 34 / 1600);
+    width: calc(min(57vw, 100vh) * 34 / 1600);
+}
+
+.rf-account-list {
+    display: grid;
+    gap: calc(min(57vw, 100vh) * 10 / 1600);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.rf-account-row {
+    display: flex;
+    gap: .35rem;
+    min-width: 0;
+}
+
+.rf-account-select,
+.rf-account-delete,
+.rf-account-page-button {
+    background: rgba(0, 0, 0, .4);
+    border: 1px solid rgba(255, 255, 255, .35);
+    border-radius: 4px;
+    color: #fff;
+    cursor: pointer;
+    font: inherit;
+}
+
+.rf-account-select {
+    flex: 1 1 auto;
+    font-size: calc(min(57vw, 100vh) * 34 / 1600);
+    min-width: 0;
+    overflow: hidden;
+    padding: .35rem .55rem;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rf-account-delete {
+    flex: 0 0 auto;
+    font-size: calc(min(57vw, 100vh) * 30 / 1600);
+    padding: .25rem .45rem;
+}
+
+.rf-account-select:hover,
+.rf-account-page-button:hover:not(:disabled) {
+    background: rgba(255, 255, 255, .16);
+}
+
+.rf-account-delete:hover {
+    background: rgba(150, 30, 30, .65);
+}
+
+.rf-account-empty {
+    color: rgba(255, 255, 255, .7);
+    font-size: calc(min(57vw, 100vh) * 34 / 1600);
+    grid-column: 1 / -1;
+    padding: .35rem 0;
+    text-align: center;
+}
+
+.rf-account-pager {
+    align-items: center;
+    display: flex;
+    gap: .65rem;
+    justify-content: center;
+    margin-top: .45rem;
+}
+
+.rf-account-page-button {
+    min-width: 2rem;
+    padding: .15rem .5rem;
+}
+
+.rf-account-page-button:disabled {
+    cursor: not-allowed;
+    opacity: .35;
+}
+
+.rf-account-page-status {
+    font-size: calc(min(57vw, 100vh) * 30 / 1600);
+}
+
+@media (max-width: 760px) {
+    .rf-account-list {
+        grid-template-columns: 1fr;
+    }
+}
