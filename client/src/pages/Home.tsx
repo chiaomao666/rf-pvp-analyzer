@@ -39,9 +39,9 @@ export default function Home() {
   return <div className="page-enter">
     <section className="page-titlebar">
       <div>
-        <p className="eyebrow">OVERVIEW / ACCOUNT-SCOPED LOCAL ARCHIVE</p>
-        <h1>排名戰總覽<span className="title-underscore">_</span></h1>
-        <p>{workspaceName ? `正在檢視 ${workspaceName} 的本機戰績；PVP 守衛收到的資料會自動同步。` : "尚未選取帳號工作區；此頁不會顯示或建立未歸屬戰績。"}</p>
+        <p className="eyebrow">PVP ANALYSIS · YOUR BATTLE SUMMARY</p>
+        <h1>戰績總覽</h1>
+        <p>{workspaceName ? `正在檢視 ${workspaceName} 的戰績摘要。` : "請先選取帳號工作區，再開始建立與檢視戰績。"}</p>
       </div>
       <div className="title-actions">
         <Link href="/record"><Button className="blueprint-button primary-button"><Plus size={16} />新增對戰</Button></Link>
@@ -56,7 +56,7 @@ export default function Home() {
     </section>
     {!loading && data?.total === 0 ? <EmptyData title={profile ? "此帳號工作區尚未建立第一筆戰績" : "請先選取帳號工作區"} description={profile ? "可手動新增單場資料；PVP 守衛收到的戰績會自動同步到此帳號工作區。" : "登入確認遊戲帳號、選取既有本機工作區，或使用示範模式後，才能建立戰績。"} action={emptyAction} /> : <section className="overview-grid">
       <article className="chart-card technical-frame">
-        <header className="panel-header"><div><p className="panel-kicker">RANKING TRAJECTORY</p><h2><ChartNoAxesCombined size={18} />排名軌跡</h2></div><span className="panel-index">01</span></header>
+        <header className="panel-header"><div><p className="panel-kicker">RANKING TREND</p><h2><ChartNoAxesCombined size={18} />排名變化</h2></div><span className="panel-index">01</span></header>
         {data && data.rankSeries.length > 0 ? <div className="rank-chart"><ResponsiveContainer width="100%" height={250}><LineChart data={data.rankSeries} margin={{ top: 18, right: 18, left: -12, bottom: 8 }}><CartesianGrid stroke="rgba(143, 220, 255, .13)" vertical={false} /><XAxis dataKey="battleAt" tickFormatter={value => formatLocalShortDate(Number(value))} stroke="#7fa2cc" tickLine={false} axisLine={false} fontSize={11} /><YAxis dataKey="rank" reversed stroke="#7fa2cc" tickLine={false} axisLine={false} fontSize={11} width={40} /><Tooltip contentStyle={{ background: "#071a3c", border: "1px solid #3979bd", borderRadius: 0, color: "#e8f4ff" }} labelFormatter={value => formatLocalDateTime(Number(value))} formatter={(value: number) => [`#${value}`, "排名"]} /><Line type="monotone" dataKey="rank" stroke="#70e5ff" strokeWidth={2.5} dot={{ r: 3, fill: "#071a3c", stroke: "#70e5ff", strokeWidth: 2 }} activeDot={{ r: 5 }} /></LineChart></ResponsiveContainer></div> : <div className="chart-empty"><TrendingUp size={22} /><p>尚無含賽後排名的連續資料。</p></div>}
       </article>
       <article className="recent-card technical-frame">
