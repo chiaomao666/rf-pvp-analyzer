@@ -13,8 +13,8 @@ export function BlueprintTag({ children, className }: { children: React.ReactNod
   return <span className={cn("blueprint-tag", className)}>{children}</span>;
 }
 
-export function OutcomeBadge({ outcome }: { outcome: "win" | "loss" | "draw" | "unknown" }) {
-  const labels = { win: "勝利", loss: "敗北", draw: "平手", unknown: "待確認" };
+export function OutcomeBadge({ outcome }: { outcome: "win" | "loss" | "unknown" }) {
+  const labels = { win: "勝利", loss: "敗北", unknown: "待確認" };
   return <span className={cn("outcome-badge", `outcome-${outcome}`)}>{labels[outcome]}</span>;
 }
 

@@ -52,7 +52,7 @@ export default function Home() {
       <MetricCard label="可判定勝率" value={loading || data?.winRate == null ? "—" : `${data.winRate}%`} detail="僅以勝利與敗北場次計算" accent="lime" />
       <MetricCard label="目前積分" value={loading ? "—" : data?.currentScore?.toLocaleString() ?? "—"} detail="最後一筆含賽後積分的紀錄" accent="cyan" />
       <MetricCard label="目前排名" value={loading ? "—" : data?.currentRank ? `#${data.currentRank}` : "—"} detail="最後一筆含賽後排名的紀錄" accent="violet" />
-      <MetricCard label="勝／敗" value={loading ? "—" : `${data?.wins ?? 0} / ${data?.losses ?? 0}`} detail="未知或平手不納入勝率" accent="orange" />
+      <MetricCard label="勝／敗" value={loading ? "—" : `${data?.wins ?? 0} / ${data?.losses ?? 0}`} detail="待確認紀錄不納入勝率" accent="orange" />
     </section>
     {!loading && data?.total === 0 ? <EmptyData title={profile ? "此帳號工作區尚未建立第一筆戰績" : "請先選取帳號工作區"} description={profile ? "可手動新增單場資料；PVP 守衛收到的戰績會自動同步到此帳號工作區。" : "登入確認遊戲帳號、選取既有本機工作區，或使用示範模式後，才能建立戰績。"} action={emptyAction} /> : <section className="overview-grid">
       <article className="chart-card technical-frame">
