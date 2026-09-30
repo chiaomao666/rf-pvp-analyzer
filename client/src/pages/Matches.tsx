@@ -2,15 +2,14 @@ import { EmptyData, ModeBadge, OutcomeBadge, RankDelta, ScoreDelta } from "@/com
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { formatLocalDateTime } from "@/lib/localTime";
-import { deleteMatch, listMatches, type LocalPvpMatch, type MatchFilters } from "@/lib/localPvpStore";
-import { Filter, Plus, Trash2 } from "lucide-react";
+import { deleteMatch, listMatches, type LocalPvpMatch, type MatchFilters, type MatchSort } from "@/lib/localPvpStore";
+import { Filter, Plus, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Link } from "wouter";
 
-const outcomes = [{ value: "", label: "所有結果" }, { value: "win", label: "勝利" }, { value: "loss", label: "敗北" }, { value: "draw", label: "平手" }, { value: "unknown", label: "待確認" }];
-function dayStart(value: string) { return value ? new Date(`${value}T00:00:00`).getTime() : undefined; }
-function dayEnd(value: string) { return value ? new Date(`${value}T23:59:59.999`).getTime() : undefined; }
+const outcomes = [{ value: "", label: "所有結果" }, { value: "win", label: "勝利" }, { value: "loss", label: "敗北" }, { value: "unknown", label: "待確認" }];
+const sortOptions: { value: MatchSort; label: string }[] = [{ value: "newest", label: "最新對戰優先" }, { value: "oldest", label: "最早對戰優先" }, { value: "scoreDelta", label: "積分變動最高" }, { value: "rankGain", label: "排名進步最多" }];
 
 function OpponentCells({ match }: { match: LocalPvpMatch }) {
   const name = match.opponentName?.trim() || match.opponentTeam[0]?.name || "未提供對手玩家";
@@ -18,15 +17,15 @@ function OpponentCells({ match }: { match: LocalPvpMatch }) {
 }
 
 export default function Matches() {
-  const [mode, setMode] = useState<"" | "1v1" | "3v3" | "5v5">(""); const [outcome, setOutcome] = useState<"" | "win" | "loss" | "draw" | "unknown">(""); const [startDate, setStartDate] = useState(""); const [endDate, setEndDate] = useState(""); const [matches, setMatches] = useState<LocalPvpMatch[]>([]); const [loading, setLoading] = useState(true); const [pendingDelete, setPendingDelete] = useState<LocalPvpMatch | null>(null); const [deleting, setDeleting] = useState(false);
-  const filters = useMemo<MatchFilters>(() => ({ ...(mode ? { mode } : {}), ...(outcome ? { outcome } : {}), ...(dayStart(startDate) ? { startAt: dayStart(startDate) } : {}), ...(dayEnd(endDate) ? { endAt: dayEnd(endDate) } : {}) }), [mode, outcome, startDate, endDate]);
+  const [outcome, setOutcome] = useState<"" | "win" | "loss" | "unknown">(""); const [query, setQuery] = useState(""); const [sort, setSort] = useState<MatchSort>("newest"); const [matches, setMatches] = useState<LocalPvpMatch[]>([]); const [loading, setLoading] = useState(true); const [pendingDelete, setPendingDelete] = useState<LocalPvpMatch | null>(null); const [deleting, setDeleting] = useState(false);
+  const filters = useMemo<MatchFilters>(() => ({ ...(outcome ? { outcome } : {}), ...(query.trim() ? { query } : {}), sort }), [outcome, query, sort]);
   const refresh = () => { setLoading(true); listMatches(filters).then(setMatches).catch(() => toast.error("讀取本機戰績失敗。 ")).finally(() => setLoading(false)); };
   useEffect(() => { refresh(); }, [filters]);
   useEffect(() => { window.addEventListener("rf-pvp-store-change", refresh); return () => window.removeEventListener("rf-pvp-store-change", refresh); }, [filters]);
   const remove = async () => { if (!pendingDelete) return; setDeleting(true); try { await deleteMatch(pendingDelete.id); toast.success("已刪除這筆本機戰績。 "); setPendingDelete(null); } catch { toast.error("刪除失敗，請稍後再試。 "); } finally { setDeleting(false); } };
   return <div className="page-enter">
     <section className="page-titlebar compact-titlebar"><div><p className="eyebrow">ARCHIVE / LOCAL BROWSER DATA</p><h1>戰績歷史<span className="title-underscore">_</span></h1><p>所有篩選僅讀取目前工作區的戰績；PVP 守衛收到的新資料會自動同步。</p></div><Link href="/record"><Button className="blueprint-button primary-button"><Plus size={16} />新增對戰</Button></Link></section>
-    <section className="filter-panel technical-frame"><div className="filter-label"><Filter size={15} />篩選條件</div><label><span>模式</span><select value={mode} onChange={event => setMode(event.target.value as typeof mode)}><option value="">全部模式</option><option value="1v1">1v1</option><option value="3v3">3v3</option><option value="5v5">5v5</option></select></label><label><span>結果</span><select value={outcome} onChange={event => setOutcome(event.target.value as typeof outcome)}>{outcomes.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label><label><span>開始日期</span><input type="date" value={startDate} onChange={event => setStartDate(event.target.value)} /></label><label><span>結束日期</span><input type="date" value={endDate} onChange={event => setEndDate(event.target.value)} /></label><button className="reset-filter" type="button" onClick={() => { setMode(""); setOutcome(""); setStartDate(""); setEndDate(""); }}>清除</button></section>
+    <section className="filter-panel technical-frame"><div className="filter-label"><Filter size={15} />篩選條件</div><label><span>結果</span><select value={outcome} onChange={event => setOutcome(event.target.value as typeof outcome)}>{outcomes.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label><label><span>排序</span><select value={sort} onChange={event => setSort(event.target.value as MatchSort)}>{sortOptions.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label><label className="match-search"><span>搜尋對手</span><div><Search size={15} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="玩家、組織或 ID" /></div></label><button className="reset-filter" type="button" onClick={() => { setOutcome(""); setQuery(""); setSort("newest"); }}>清除</button></section>
     {loading ? <div className="loading-block">讀取本機戰績…</div> : !matches.length ? <EmptyData title="找不到符合條件的戰績" description="調整日期、模式或結果篩選，或新增一筆排名戰紀錄。" action={<Link href="/record"><Button className="blueprint-button primary-button"><Plus size={16} />新增對戰</Button></Link>} /> : <section className="history-table technical-frame">
       <div className="history-head"><span>日期／模式</span><span>結果</span><span>對手玩家</span><span>聯盟／組織</span><span>玩家 ID</span><span>積分變動</span><span>排名變動</span><span>操作</span></div>
       {matches.map(match => <article key={match.id} className="history-row">

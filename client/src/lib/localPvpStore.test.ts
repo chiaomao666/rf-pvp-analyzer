@@ -20,10 +20,10 @@ describe("parsePvpJson", () => {
     expect(parsed.records).toHaveLength(1);
     expect(parsed.records[0]).toMatchObject({ mode: "1v1", outcome: "win", rankBefore: 30, rankAfter: 22, scoreBefore: 6740, scoreAfter: 6860 });
   });
-  it("normalizes a five-versus-five bridge summary", () => {
+  it("normalizes a legacy multi-member bridge summary to one-versus-one", () => {
     const team = (prefix: string) => Array.from({ length: 5 }, (_, index) => ({ name: `${prefix}-${index}`, level: 80 }));
     const parsed = parsePvpJson(JSON.stringify({ battleAt: 1787603139254, mode: "5v5", outcome: "loss", playerTeam: team("我方"), opponentTeam: team("敵方"), sourceBattleChannel: "pvp:ranked", sourceBattleId: "bridge-1" }));
-    expect(parsed.records[0]).toMatchObject({ mode: "5v5", outcome: "loss", sourceBattleId: "bridge-1" });
+    expect(parsed.records[0]).toMatchObject({ mode: "1v1", outcome: "loss", sourceBattleId: "bridge-1" });
     expect(parsed.records[0]?.playerTeam).toHaveLength(5);
   });
 
@@ -49,17 +49,17 @@ describe("parsePvpJson", () => {
 });
 
 describe("帳號工作區隔離與備份", () => {
-  it("保存 5v5 手動紀錄時保留雙方各五名角色，且既有 1v1 紀錄可共存", async () => {
+  it("保留 1v1 對戰的雙方完整隊伍", async () => {
     const profile = await officialProfile("505");
     setActiveProfileId(profile.id);
     const makeFive = (prefix: string) => Array.from({ length: 5 }, (_, index) => ({ name: `${prefix}-${index + 1}`, level: 80 + index, power: 1000 + index }));
-    await saveMatch({ battleAt: 1787603139254, mode: "5v5", outcome: "win", playerTeam: makeFive("我方"), opponentTeam: makeFive("對方") });
+    await saveMatch({ battleAt: 1787603139254, mode: "1v1", outcome: "win", playerTeam: makeFive("我方"), opponentTeam: makeFive("對方") });
     await saveMatch(fixtureRecord("legacy-1v1"));
     const matches = await listMatches();
-    const fiveVsFive = matches.find(match => match.mode === "5v5");
-    expect(fiveVsFive).toMatchObject({ profileId: profile.id, mode: "5v5" });
-    expect(fiveVsFive?.playerTeam).toHaveLength(5);
-    expect(fiveVsFive?.opponentTeam).toHaveLength(5);
+    const normalized = matches.find(match => match.mode === "1v1");
+    expect(normalized).toMatchObject({ profileId: profile.id, mode: "1v1" });
+    expect(normalized?.playerTeam).toHaveLength(5);
+    expect(normalized?.opponentTeam).toHaveLength(5);
     expect(matches.some(match => match.mode === "1v1")).toBe(true);
   });
 
@@ -80,7 +80,7 @@ describe("帳號工作區隔離與備份", () => {
 
   it("bridge 事件以來源鍵更新而不是重複建立", async () => {
     const profile = await officialProfile("bridge-user"); setActiveProfileId(profile.id);
-    const input = { ...fixtureRecord("bridge-dedupe"), mode: "5v5" as const, playerTeam: [{ name: "我方" }], opponentTeam: [{ name: "敵方" }] };
+    const input = { ...fixtureRecord("bridge-dedupe"), playerTeam: [{ name: "我方" }], opponentTeam: [{ name: "敵方" }] };
     await expect(ingestBridgeMatch(input)).resolves.toMatchObject({ created: true, updated: false });
     await expect(ingestBridgeMatch({ ...input, outcome: "loss" })).resolves.toMatchObject({ created: false, updated: true });
     await expect(listMatches()).resolves.toMatchObject([{ sourceBattleId: "bridge-dedupe", outcome: "loss" }]);
@@ -177,11 +177,11 @@ describe("工作區玩家身分格式", () => {
 });
 
 describe("同步身份欄位", () => {
-  it("保留 5v5 戰績中的玩家與雙方組織名稱", () => {
+  it("保留 1v1 戰績中的玩家與雙方組織名稱", () => {
     const team = (prefix: string) => Array.from({ length: 5 }, (_, index) => ({ name: `${prefix}-${index}` }));
     const parsed = parsePvpJson(JSON.stringify({
       battleAt: 1787603139254,
-      mode: "5v5",
+      mode: "1v1",
       outcome: "win",
       playerName: "我方玩家",
       playerUnion: "我方聯盟",

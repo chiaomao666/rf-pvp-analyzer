@@ -383,3 +383,17 @@ input:not([type="checkbox"]), select, textarea {
   .history-table { overflow-x: auto; }
   .history-head, .history-row { min-width: 720px; }
 }
+
+/* Match filters and the confirmation dialog use solid surfaces for reliable contrast. */
+.match-search { min-width: min(250px, 100%); flex: 1 1 250px; }
+.match-search > div { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 10px; border: 1px solid rgba(151, 171, 202, .24); border-radius: 9px; background: rgba(7, 13, 23, .58); }
+.match-search input { width: 100%; min-width: 0; min-height: 0 !important; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; }
+[data-slot="alert-dialog-content"] { opacity: 1; background: #111a29 !important; border-color: rgba(183, 203, 229, .55) !important; box-shadow: 0 24px 70px rgba(0, 0, 0, .58) !important; }
+[data-slot="alert-dialog-content"] [data-slot="alert-dialog-description"] { color: #b9c6d8; }
+@media (max-width: 1100px) {
+  .history-head > :nth-child(4) { display: block; }
+}
+@media (max-width: 760px) {
+  .history-head, .history-row { min-width: 780px; }
+  .filter-panel .match-search { width: 100%; flex-basis: 100%; }
+}

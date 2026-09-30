@@ -48,7 +48,7 @@ export default function Home() {
       </div>
     </section>
     <section className="metrics-grid" aria-label="戰績關鍵指標">
-      <MetricCard label="累計場次" value={loading ? "—" : data?.total ?? 0} detail="目前工作區的 1v1、3v3 與 5v5 場次" accent="cyan" />
+      <MetricCard label="累計場次" value={loading ? "—" : data?.total ?? 0} detail="目前工作區的 1v1 排名戰場次" accent="cyan" />
       <MetricCard label="可判定勝率" value={loading || data?.winRate == null ? "—" : `${data.winRate}%`} detail="僅以勝利與敗北場次計算" accent="lime" />
       <MetricCard label="目前積分" value={loading ? "—" : data?.currentScore?.toLocaleString() ?? "—"} detail="最後一筆含賽後積分的紀錄" accent="cyan" />
       <MetricCard label="目前排名" value={loading ? "—" : data?.currentRank ? `#${data.currentRank}` : "—"} detail="最後一筆含賽後排名的紀錄" accent="violet" />
