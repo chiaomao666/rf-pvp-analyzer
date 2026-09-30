@@ -29,8 +29,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <header className="topbar">
         <Link href="/" className="brand-lockup" aria-label="返回排名戰總覽"><span className="brand-mark"><Shield size={19} /></span><span><strong>RF</strong><em>PVP ANALYZER</em></span></Link>
         <nav className="topnav" aria-label="主要導覽">
-          {navigation.map(item => { const active = item.href === "/" ? location === "/" : location === item.href || location.startsWith(`${item.href}/`); const Icon = item.icon; return <Link key={item.href} href={item.href} className={active ? "active" : ""}><Icon size={15} />{item.label}</Link>; })}
-          <Link href="/account" className={location.startsWith("/account") ? "active workspace-nav-link" : "workspace-nav-link"}><UserRound size={15} />帳號工作區</Link>
+          {navigation.map(item => { const active = item.href === "/" ? location === "/" : location === item.href || location.startsWith(`${item.href}/`); const Icon = item.icon; return <Link key={item.href} href={item.href} className={active ? "active" : ""} aria-label={item.label}><Icon size={15} /><span className="nav-label">{item.label}</span></Link>; })}
+          <Link href="/account" className={location.startsWith("/account") ? "active workspace-nav-link" : "workspace-nav-link"} aria-label="帳號工作區"><UserRound size={15} /><span className="nav-label">帳號工作區</span></Link>
         </nav>
         <Link href="/account" className="account-zone" aria-label="開啟帳號工作區"><span className="presence-dot" /><div className="account-copy"><b>{profileLabel(session)}</b><small>{session?.verifiedThisSession ? "VERIFIED THIS SESSION" : session ? "LOCAL WORKSPACE" : "尚未選取帳號"}</small></div><ChevronDown size={14} className="account-chevron" /></Link>
       </header>

@@ -397,3 +397,29 @@ input:not([type="checkbox"]), select, textarea {
   .history-head, .history-row { min-width: 780px; }
   .filter-panel .match-search { width: 100%; flex-basis: 100%; }
 }
+
+/* Mobile record detail: compact, touch-friendly cards without decorative overlap. */
+@media (max-width: 760px) {
+  .account-zone { display: none; }
+  .detail-topline { margin-bottom: 12px; }
+  .detail-topline .blueprint-tag { padding: 5px 7px; font-size: 8px; }
+  .detail-header { gap: 16px; padding: 18px; }
+  .detail-header h1 { margin-bottom: 11px; font-size: 32px; line-height: 1.16; }
+  .detail-header .danger-button { width: 100%; justify-content: center; min-height: 42px; }
+  .detail-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin: 14px 0; border: 0; background: transparent; }
+  .detail-stat { min-height: 104px; padding: 14px; border: 1px solid var(--app-border); border-radius: 13px; background: var(--app-surface-raised); }
+  .detail-stat span { margin-bottom: 10px; font-size: 10px; letter-spacing: .04em; }
+  .detail-stat b { font-size: 29px; }.detail-stat .score-delta, .detail-stat .rank-delta { font-size: 18px; }
+  .versus-grid { display: block; }
+  .versus-mark { display: none; }
+  .team-panel { min-height: 0; padding: 18px; }
+  .versus-grid .team-panel + .versus-mark + .team-panel { margin-top: 12px; }
+  .team-panel header { margin-bottom: 12px; }.team-panel h2 { font-size: 19px; }
+  .team-panel .team-member { min-height: 36px; }.team-total { margin-top: 14px; }
+}
+@media (max-width: 520px) {
+  .topnav a { gap: 0; }.topnav a svg { width: 18px; height: 18px; }
+  .topnav .nav-label { display: none; }
+  .topnav a { min-height: 38px; }
+  .detail-header h1 { font-size: 29px; }
+}
