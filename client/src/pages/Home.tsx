@@ -8,6 +8,10 @@ import { Link } from "wouter";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 type DashboardData = Awaited<ReturnType<typeof dashboard>>;
+type SeasonKey = "S4" | "S5";
+
+const S4_END = new Date(2026, 7, 31, 23, 59, 59, 999).getTime();
+const seasonLabels: Record<SeasonKey, string> = { S4: "S4 · 上個賽季", S5: "S5 · 當前賽季" };
 
 function useDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -33,8 +37,11 @@ function useWorkspaceProfile() {
 export default function Home() {
   const { data, loading } = useDashboard();
   const profile = useWorkspaceProfile();
+  const [season, setSeason] = useState<SeasonKey>("S5");
   const workspaceName = profile?.kind === "demo" ? "示範模式工作區" : profile ? (profile.playerName || "遊戲玩家工作區") : null;
   const emptyAction = !profile ? <Link href="/account"><Button className="blueprint-button primary-button">前往帳號工作區</Button></Link> : <Link href="/record"><Button className="blueprint-button primary-button"><Plus size={16} />新增第一場</Button></Link>;
+  const seasonSeries = data?.rankSeries.filter(point => season === "S4" ? point.battleAt <= S4_END : point.battleAt > S4_END) ?? [];
+  const seasonCounts: Record<SeasonKey, number> = { S4: data?.rankSeries.filter(point => point.battleAt <= S4_END).length ?? 0, S5: data?.rankSeries.filter(point => point.battleAt > S4_END).length ?? 0 };
 
   return <div className="page-enter">
     <section className="page-titlebar">
@@ -56,8 +63,8 @@ export default function Home() {
     </section>
     {!loading && data?.total === 0 ? <EmptyData title={profile ? "此帳號工作區尚未建立第一筆戰績" : "請先選取帳號工作區"} description={profile ? "可手動新增單場資料；PVP 守衛收到的戰績會自動同步到此帳號工作區。" : "登入確認遊戲帳號、選取既有本機工作區，或使用示範模式後，才能建立戰績。"} action={emptyAction} /> : <section className="overview-grid">
       <article className="chart-card technical-frame">
-        <header className="panel-header"><div><p className="panel-kicker">RANKING TREND</p><h2><ChartNoAxesCombined size={18} />排名變化</h2></div><span className="panel-index">01</span></header>
-        {data && data.rankSeries.length > 0 ? <div className="rank-chart"><ResponsiveContainer width="100%" height={250}><LineChart data={data.rankSeries} margin={{ top: 18, right: 18, left: -12, bottom: 8 }}><CartesianGrid stroke="rgba(143, 220, 255, .13)" vertical={false} /><XAxis dataKey="battleAt" tickFormatter={value => formatLocalShortDate(Number(value))} stroke="#7fa2cc" tickLine={false} axisLine={false} fontSize={11} /><YAxis dataKey="rank" reversed stroke="#7fa2cc" tickLine={false} axisLine={false} fontSize={11} width={40} /><Tooltip contentStyle={{ background: "#071a3c", border: "1px solid #3979bd", borderRadius: 0, color: "#e8f4ff" }} labelFormatter={value => formatLocalDateTime(Number(value))} formatter={(value: number) => [`#${value}`, "排名"]} /><Line type="monotone" dataKey="rank" stroke="#70e5ff" strokeWidth={2.5} dot={{ r: 3, fill: "#071a3c", stroke: "#70e5ff", strokeWidth: 2 }} activeDot={{ r: 5 }} /></LineChart></ResponsiveContainer></div> : <div className="chart-empty"><TrendingUp size={22} /><p>尚無含賽後排名的連續資料。</p></div>}
+        <header className="panel-header"><div><p className="panel-kicker">RANKING TREND</p><h2><ChartNoAxesCombined size={18} />排名變化</h2></div><span className="panel-index">{season}</span></header>
+        {data && data.rankSeries.length > 0 ? <><div className="rank-chart">{seasonSeries.length > 0 ? <ResponsiveContainer width="100%" height={250}><LineChart data={seasonSeries} margin={{ top: 18, right: 18, left: -12, bottom: 8 }}><CartesianGrid stroke="rgba(143, 220, 255, .13)" vertical={false} /><XAxis dataKey="battleAt" tickFormatter={value => formatLocalShortDate(Number(value))} stroke="#7fa2cc" tickLine={false} axisLine={false} fontSize={11} /><YAxis dataKey="rank" reversed stroke="#7fa2cc" tickLine={false} axisLine={false} fontSize={11} width={40} /><Tooltip cursor={{ stroke: "rgba(112, 229, 255, .35)", strokeWidth: 1 }} contentStyle={{ background: "#101b2c", border: "1px solid #3979bd", borderRadius: 10, color: "#e8f4ff" }} labelFormatter={value => formatLocalDateTime(Number(value))} formatter={(value: number) => [`#${value}`, "排名"]} /><Line type="linear" dataKey="rank" stroke="#70e5ff" strokeWidth={2.5} dot={false} activeDot={{ r: 5, fill: "#101b2c", stroke: "#70e5ff", strokeWidth: 2 }} isAnimationActive={false} /></LineChart></ResponsiveContainer> : <div className="chart-empty"><TrendingUp size={22} /><p>{season} 尚無含賽後排名的戰績。</p></div>}</div><div className="season-switch" aria-label="切換排名賽季">{(["S5", "S4"] as SeasonKey[]).map(item => <button key={item} type="button" className={season === item ? "active" : ""} onClick={() => setSeason(item)}>{seasonLabels[item]} <small>{seasonCounts[item]} 場</small></button>)}</div></> : <div className="chart-empty"><TrendingUp size={22} /><p>尚無含賽後排名的連續資料。</p></div>}
       </article>
       <article className="recent-card technical-frame">
         <header className="panel-header"><div><p className="panel-kicker">LATEST ENTRIES</p><h2><Clock3 size={18} />近期戰績</h2></div><Link href="/matches" className="text-link">查看全部 <ArrowUpRight size={15} /></Link></header>

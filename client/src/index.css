@@ -423,3 +423,12 @@ input:not([type="checkbox"]), select, textarea {
   .topnav a { min-height: 38px; }
   .detail-header h1 { font-size: 29px; }
 }
+
+/* Ranking chart seasons */
+.season-switch { display: flex; gap: 8px; margin-top: 12px; }
+.season-switch button { display: inline-flex; align-items: baseline; gap: 7px; min-height: 34px; padding: 7px 11px; color: #94a5ba; border: 1px solid var(--app-border); border-radius: 9px; background: rgba(7, 13, 23, .4); font-size: 11px; font-weight: 700; cursor: pointer; transition: background .16s ease, color .16s ease, border-color .16s ease; }
+.season-switch button:hover { color: #e8f7f5; border-color: rgba(120, 217, 207, .45); }
+.season-switch button.active { color: #dffffa; border-color: rgba(120, 217, 207, .5); background: rgba(86, 189, 181, .16); }
+.season-switch small { color: #788ba1; font-size: 9px; font-weight: 500; }
+.season-switch button.active small { color: #9cddd6; }
+@media (max-width: 520px) { .season-switch { width: 100%; }.season-switch button { flex: 1; justify-content: center; padding-inline: 7px; } }
