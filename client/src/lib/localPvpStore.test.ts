@@ -86,6 +86,17 @@ describe("帳號工作區隔離與備份", () => {
     await expect(listMatches()).resolves.toMatchObject([{ sourceBattleId: "bridge-dedupe", outcome: "loss" }]);
   });
 
+  it("同場結算補齊沿用原 ID，晚到的不完整資料不清除已確認結果", async () => {
+    const profile = await officialProfile("bridge-settlement"); setActiveProfileId(profile.id);
+    const input = { ...fixtureRecord("late-settlement"), outcome: "unknown" as const, scoreAfter: 27450, playerTeam: [{ name: "我方" }], opponentTeam: [{ name: "敵方" }] };
+    const created = await ingestBridgeMatch(input);
+    const completed = await ingestBridgeMatch({ ...input, outcome: "win", scoreBefore: 27330, rankBefore: 47, rankAfter: 46 });
+    expect(completed.id).toBe(created.id);
+    await ingestBridgeMatch({ ...input, scoreBefore: undefined, rankBefore: undefined });
+    expect(await listMatches()).toHaveLength(1);
+    expect(await getMatch(created.id)).toMatchObject({ outcome: "win", scoreBefore: 27330, scoreAfter: 27450, rankBefore: 47, rankAfter: 46 });
+  });
+
   it("只在明確呼叫遷移後才把 v1 未綁定資料指派給第一個帳號", async () => {
     const legacyRecords = Array.from({ length: 11 }, (_, index) => fixtureRecord(`legacy-source-${index + 1}`));
     const legacy = JSON.stringify({ format: "rf-pvp-analyzer/local-backup-v1", exportedAt: "2026-08-24T22:39:08.808Z", recordCount: 11, records: legacyRecords, imports: [{ receivedAt: 1787603139254, label: "舊資料", recognizedCount: 11, rejectedCount: 0, warnings: [] }] });

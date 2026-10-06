@@ -34,6 +34,14 @@ export function normalizeCapture(input) {
   const sourceKey = normalized.sourceBattleChannel || normalized.sourceBattleId || `${normalized.battleAt}:${normalized.mode}`;
   return { ok: true, data: normalized, sourceKey: sourceKey.slice(0, 500) };
 }
+export function mergeCaptureData(previous, incoming) {
+  const merged = { ...previous, ...incoming };
+  for (const key of ["playerName", "playerUnion", "playerId", "opponentName", "opponentUnion", "opponentPlayerId", "rankBefore", "rankAfter", "scoreBefore", "scoreAfter"]) {
+    if (incoming[key] === undefined && previous[key] !== undefined) merged[key] = previous[key];
+  }
+  if (incoming.outcome === "unknown" && ["win", "loss"].includes(previous.outcome)) merged.outcome = previous.outcome;
+  return merged;
+}
 function json(data, status = 200, headers = {}) { return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...headers } }); }
 function cors(request, env) {
   const origin = request.headers.get("Origin") || ""; const allowed = String(env.ALLOWED_ORIGINS || "").split(",").map((item) => item.trim()).filter(Boolean);
@@ -129,12 +137,19 @@ export default {
         const normalized = normalizeCapture(await readBody(request)); if (!normalized.ok) return json(normalized, 400, headers);
         const { data, sourceKey } = normalized; const existing = await env.DB.prepare("SELECT id FROM pvp_events WHERE workspace_id = ? AND source_key = ?").bind(data.workspaceId, sourceKey).first();
         if (existing) {
-          const existingRow = await env.DB.prepare("SELECT payload_json FROM pvp_events WHERE id = ?").bind(existing.id).first(); let merged = data;
-          try { const previous = JSON.parse(existingRow?.payload_json || "{}"); merged = { ...previous, ...data }; for (const key of ["playerName", "playerUnion", "playerId", "opponentName", "opponentUnion", "opponentPlayerId"]) if (!data[key] && previous[key]) merged[key] = previous[key]; } catch {}
-          let previousPayload = {}; try { previousPayload = JSON.parse(existingRow?.payload_json || "{}"); } catch {}
-          const changedIdentity = ["playerName", "playerUnion", "playerId", "opponentName", "opponentUnion", "opponentPlayerId"].some((key) => data[key] && data[key] !== (previousPayload[key] || ""));
-          if (changedIdentity) await env.DB.prepare("UPDATE pvp_events SET payload_json = ?, captured_at = ? WHERE id = ?").bind(JSON.stringify(merged), Date.now(), existing.id).run();
-          return json({ accepted: true, duplicate: !changedIdentity, updated: changedIdentity, eventId: Number(existing.id) }, 200, headers);
+          const existingRow = await env.DB.prepare("SELECT payload_json FROM pvp_events WHERE id = ?").bind(existing.id).first();
+          let previous = {}; try { previous = JSON.parse(existingRow?.payload_json || "{}"); } catch {}
+          const merged = mergeCaptureData(previous, data);
+          const changed = JSON.stringify(merged) !== JSON.stringify(previous);
+          let eventId = Number(existing.id);
+          if (changed) {
+            // id 是網站同步游標，戰績身份是 workspace/source_key。
+            // 同場補更新提升游標，讓已讀過舊事件的網站收到新版；仍只有一列。
+            await env.DB.prepare("UPDATE pvp_events SET id = (SELECT COALESCE(MAX(id), 0) + 1 FROM pvp_events), payload_json = ?, captured_at = ? WHERE id = ?").bind(JSON.stringify(merged), Date.now(), existing.id).run();
+            const updated = await env.DB.prepare("SELECT id FROM pvp_events WHERE workspace_id = ? AND source_key = ?").bind(data.workspaceId, sourceKey).first();
+            eventId = Number(updated.id);
+          }
+          return json({ accepted: true, duplicate: !changed, updated: changed, eventId }, 200, headers);
         }
         const result = await env.DB.prepare("INSERT INTO pvp_events (workspace_id, source_key, payload_json, captured_at) VALUES (?, ?, ?, ?)").bind(data.workspaceId, sourceKey, JSON.stringify(data), Date.now()).run();
         return json({ accepted: true, duplicate: false, eventId: Number(result.meta.last_row_id) }, 202, headers);
