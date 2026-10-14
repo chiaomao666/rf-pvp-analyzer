@@ -45,8 +45,15 @@ export function mergeCaptureData(previous, incoming) {
 function json(data, status = 200, headers = {}) { return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...headers } }); }
 function cors(request, env) {
   const origin = request.headers.get("Origin") || ""; const allowed = String(env.ALLOWED_ORIGINS || "").split(",").map((item) => item.trim()).filter(Boolean);
-  const allowOrigin = origin && allowed.includes(origin) ? origin : "null";
-  return { "access-control-allow-origin": allowOrigin, "access-control-allow-methods": "GET,POST,OPTIONS", "access-control-allow-headers": "Content-Type, Accept, X-RF-Write-Secret", "access-control-allow-credentials": "true", vary: "Origin" };
+  // Android WebViewAssetLoader 的固定來源；只開放模組心跳與戰績寫入，
+  // 不自動開放網站登入、session、查詢、管理 API。寫入仍須原本的密鑰。
+  const pathname = new URL(request.url).pathname;
+  const appCaptureOrigin = origin === "https://appassets.androidplatform.net" &&
+    ["/api/pvp/health", "/api/pvp/capture"].includes(pathname);
+  const headers = { "access-control-allow-methods": "GET,POST,OPTIONS", "access-control-allow-headers": "Content-Type, Accept, X-RF-Write-Secret", "access-control-allow-credentials": "true", vary: "Origin" };
+  if (origin && (allowed.includes(origin) || appCaptureOrigin)) headers["access-control-allow-origin"] = origin;
+  // 未允許的來源不回傳 ACAO；"null" 不是拒絕標記，而是一種實際來源。
+  return headers;
 }
 function secretValue(env, name) { return String(env[name] || "").trim(); }
 function writeAuthorized(request, env) { const expected = secretValue(env, "PVP_WRITE_SECRET"); const supplied = request.headers.get("X-RF-Write-Secret") || ""; return Boolean(expected) && supplied === expected; }

@@ -13,5 +13,6 @@ migrations_dir = "migrations"
 
 [vars]
 # Comma-separated exact frontend origins. Add your GitHub Pages origin.
+# Android https://appassets.androidplatform.net is allowed by code only on health/capture.
 ALLOWED_ORIGINS = "https://chiaomao666.github.io"
 # Set PVP_SITE_PASSWORD, PVP_SESSION_SECRET and PVP_WRITE_SECRET with `wrangler secret put`; do not put them here.

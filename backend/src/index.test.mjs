@@ -63,6 +63,48 @@ describe("PVP capture identity fields", () => {
 });
 
 describe("PVP Worker security boundary", () => {
+  it("allows Android App preflight only for health/capture, preserving the write-secret header", async () => {
+    const current = env();
+    for (const path of ["/api/pvp/health", "/api/pvp/capture"]) {
+      const response = await worker.fetch(request(path, { method: "OPTIONS", headers: {
+        Origin: "https://appassets.androidplatform.net", "Access-Control-Request-Method": path.endsWith("health") ? "GET" : "POST",
+        "Access-Control-Request-Headers": "content-type,x-rf-write-secret",
+      } }), current);
+      expect(response.status).toBe(204);
+      expect(response.headers.get("access-control-allow-origin")).toBe("https://appassets.androidplatform.net");
+      expect(response.headers.get("access-control-allow-headers")).toContain("X-RF-Write-Secret");
+      expect(response.headers.get("vary")).toBe("Origin");
+    }
+    expect(current.DB.prepare).not.toHaveBeenCalled();
+  });
+
+  it("does not grant App access to site APIs, arbitrary origins or implicit null origins", async () => {
+    for (const [path, origin] of [["/api/pvp/login", "https://appassets.androidplatform.net"],
+      ["/api/pvp/events", "https://appassets.androidplatform.net"],
+      ["/api/pvp/health", "https://evil.example"], ["/api/pvp/health", "null"],
+      ["/api/pvp/health", "https://appassets.androidplatform.net.evil.example"]]) {
+      const response = await worker.fetch(request(path, { method: "OPTIONS", headers: { Origin: origin } }), env());
+      expect(response.headers.get("access-control-allow-origin")).toBeNull();
+    }
+  });
+
+  it("App origin still requires the correct write secret and exposes readable auth errors", async () => {
+    const current = env();
+    for (const secret of ["", "wrong"]) {
+      for (const path of ["/api/pvp/health", "/api/pvp/capture"]) {
+        const response = await worker.fetch(request(path, { method: path.endsWith("health") ? "GET" : "POST",
+          headers: { Origin: "https://appassets.androidplatform.net", "X-RF-Write-Secret": secret }, body: path.endsWith("capture") ? "{}" : undefined }), current);
+        expect(response.status).toBe(401);
+        expect(response.headers.get("access-control-allow-origin")).toBe("https://appassets.androidplatform.net");
+      }
+    }
+    expect(current.DB.prepare).not.toHaveBeenCalled();
+    const response = await worker.fetch(request("/api/pvp/health", { headers: { Origin: "https://appassets.androidplatform.net", "X-RF-Write-Secret": "write-secret" } }), current);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("access-control-allow-origin")).toBe("https://appassets.androidplatform.net");
+    await expect(response.json()).resolves.toMatchObject({ ok: true });
+  });
+
   it("fails closed without a site session or write secret", async () => {
     const current = env();
     const health = await worker.fetch(request("/api/pvp/health"), current);
@@ -173,6 +215,6 @@ describe("PVP Worker security boundary", () => {
   it("does not allow an unlisted browser origin", async () => {
     const current = env();
     const response = await worker.fetch(new Request("https://worker.example/api/pvp/session", { headers: { Origin: "https://evil.example" } }), current);
-    expect(response.headers.get("access-control-allow-origin")).toBe("null");
+    expect(response.headers.get("access-control-allow-origin")).toBeNull();
   });
 });
