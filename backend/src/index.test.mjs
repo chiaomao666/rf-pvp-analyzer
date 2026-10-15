@@ -78,14 +78,34 @@ describe("PVP Worker security boundary", () => {
     expect(current.DB.prepare).not.toHaveBeenCalled();
   });
 
-  it("does not grant App access to site APIs, arbitrary origins or implicit null origins", async () => {
+  it("does not grant App/local-file access to site APIs or arbitrary origins", async () => {
     for (const [path, origin] of [["/api/pvp/login", "https://appassets.androidplatform.net"],
       ["/api/pvp/events", "https://appassets.androidplatform.net"],
-      ["/api/pvp/health", "https://evil.example"], ["/api/pvp/health", "null"],
+      ["/api/pvp/health", "https://evil.example"], ["/api/pvp/login", "null"], ["/api/pvp/events", "null"],
       ["/api/pvp/health", "https://appassets.androidplatform.net.evil.example"]]) {
       const response = await worker.fetch(request(path, { method: "OPTIONS", headers: { Origin: origin } }), env());
       expect(response.headers.get("access-control-allow-origin")).toBeNull();
     }
+  });
+
+  it("restores file:// Origin null for mod endpoints without allowing cookie credentials", async () => {
+    const current = env();
+    for (const path of ["/api/pvp/health", "/api/pvp/capture"]) {
+      const preflight = await worker.fetch(request(path, { method: "OPTIONS", headers: { Origin: "null", "Access-Control-Request-Headers": "content-type,x-rf-write-secret" } }), current);
+      expect(preflight.status).toBe(204);
+      expect(preflight.headers.get("access-control-allow-origin")).toBe("null");
+      expect(preflight.headers.get("access-control-allow-credentials")).toBeNull();
+      for (const secret of ["", "wrong"]) {
+        const response = await worker.fetch(request(path, { method: path.endsWith("health") ? "GET" : "POST", headers: { Origin: "null", "X-RF-Write-Secret": secret }, body: path.endsWith("capture") ? "{}" : undefined }), current);
+        expect(response.status).toBe(401);
+        expect(response.headers.get("access-control-allow-origin")).toBe("null");
+      }
+    }
+    expect(current.DB.prepare).not.toHaveBeenCalled();
+    const response = await worker.fetch(request("/api/pvp/health", { headers: { Origin: "null", "X-RF-Write-Secret": "write-secret" } }), current);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("access-control-allow-origin")).toBe("null");
+    await expect(response.json()).resolves.toMatchObject({ ok: true });
   });
 
   it("App origin still requires the correct write secret and exposes readable auth errors", async () => {
